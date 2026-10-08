@@ -40,7 +40,7 @@ function WidgetList({
       const target = document
         .elementFromPoint(event.clientX, event.clientY)
         ?.closest<HTMLElement>("[data-widget-index]");
-      const nextIndex = Number(target?.dataset.widgetIndex);
+      const nextIndex = Number(target?.dataset["widgetIndex"]);
       const currentIndex = dragIndexRef.current;
       if (!Number.isInteger(nextIndex) || currentIndex === null || nextIndex === currentIndex)
         return;

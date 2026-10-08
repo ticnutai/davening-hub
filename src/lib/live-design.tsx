@@ -348,7 +348,7 @@ export function LiveDesignProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!enabled) return;
-    const isColorSampling = () => document.documentElement.dataset.colorSampling === "true";
+    const isColorSampling = () => document.documentElement.dataset["colorSampling"] === "true";
     const isUi = (target: EventTarget | null) =>
       target instanceof Element && !!target.closest("[data-design-mode-ui]");
     const move = (event: MouseEvent) => {
