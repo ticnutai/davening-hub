@@ -1,0 +1,8 @@
+.new-shul-site form, .new-shul-site form .space-y-2 { min-width: 0; }
+.new-shul-site form [role="combobox"] { min-width: 0; max-width: 100%; }
+.new-shul-site form [role="combobox"] > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) {
+  /* Keep the browser's scroll origin stable; Hebrew direction stays on the site. */
+  html:has(.new-shul-site), body:has(.new-shul-site) { overflow-x: hidden; direction: ltr; }
+  .new-shul-site form input, .new-shul-site form textarea, .new-shul-site form select { font-size: 16px; }
+}

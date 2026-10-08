@@ -1,0 +1,984 @@
+import { useEffect, useRef, useState } from "react";
+import { LOCAL_STUDIO } from '@/newShul/localStore';
+import { localImage } from '@/newShul/localImage';
+import { useQueryClient } from "@tanstack/react-query";
+import { FolderPlus, GripVertical, ImagePlus, Loader2, Palette, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ANNOUNCEMENT_KINDS } from "@community/lib/announcement-kinds";
+import {
+  DAYS_HE,
+  useAnnouncements,
+  useChavrutot,
+  useShiurim,
+  useShiurCategories,
+  type Announcement,
+  type Chavruta,
+  type Shiur,
+} from "@community/lib/data";
+import { useDeleteRow, useSaveRow } from "@community/lib/admin";
+import { supabase } from "@community/integrations/supabase/client";
+import { communityId } from "@/community/lib/community";
+import {
+  ANNOUNCEMENT_STYLE_PRESETS,
+  announcementCardStyle,
+  normalizeAnnouncementStyle,
+  presetAnnouncementStyle,
+  type AnnouncementPreset,
+  type AnnouncementStyle,
+} from "@community/lib/announcement-style";
+
+function RowShell({
+  title,
+  subtitle,
+  onEdit,
+  onDelete,
+}: {
+  title: string;
+  subtitle: string;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium">{title}</p>
+        <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
+      </div>
+      <Button size="icon" variant="ghost" onClick={onEdit} aria-label="עריכה">
+        <Pencil className="size-4" />
+      </Button>
+      <Button size="icon" variant="ghost" onClick={onDelete} aria-label="מחיקה">
+        <Trash2 className="size-4 text-destructive" />
+      </Button>
+    </div>
+  );
+}
+
+function reorder<T>(items: T[], from: number, to: number) {
+  const next = [...items];
+  const [moved] = next.splice(from, 1);
+  if (!moved) return items;
+  next.splice(to, 0, moved);
+  return next;
+}
+
+function AnnouncementDesignEditor({
+  value,
+  title,
+  body,
+  onChange,
+}: {
+  value: unknown;
+  title: string;
+  body: string;
+  onChange: (style: AnnouncementStyle) => void;
+}) {
+  const style = normalizeAnnouncementStyle(value);
+  const set = (patch: Partial<AnnouncementStyle>) => onChange({ ...style, ...patch });
+
+  return (
+    <section className="space-y-4 rounded-2xl border border-amber-300/60 bg-amber-50/35 p-4" data-testid="announcement-design-editor">
+      <div className="flex items-center justify-between gap-3">
+        <Button type="button" size="sm" variant="ghost" onClick={() => onChange(presetAnnouncementStyle("classic"))}>
+          <RotateCcw className="size-4" /> איפוס
+        </Button>
+        <div className="text-right">
+          <h3 className="flex items-center justify-end gap-2 font-semibold"><Palette className="size-4 text-amber-600" /> עיצוב המודעה</h3>
+          <p className="text-xs text-muted-foreground">בחרו תבנית או התאימו צבעים, טקסט ומסגרת.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5" role="group" aria-label="תבניות עיצוב מודעה">
+        {ANNOUNCEMENT_STYLE_PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            aria-pressed={style.preset === preset.id}
+            className={`rounded-xl border p-2 text-right transition ${style.preset === preset.id ? "border-amber-500 bg-white ring-2 ring-amber-200" : "border-border bg-white/70 hover:border-amber-300"}`}
+            onClick={() => onChange(presetAnnouncementStyle(preset.id))}
+          >
+            <span className="block text-sm font-semibold">{preset.label}</span>
+            <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">{preset.description}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        {([
+          ["background", "צבע רקע"],
+          ["foreground", "צבע טקסט"],
+          ["accent", "צבע הדגשה"],
+        ] as const).map(([field, label]) => (
+          <Label key={field} className="flex items-center justify-between gap-3 rounded-xl border bg-white p-2.5">
+            <span>{label}</span>
+            <Input
+              type="color"
+              aria-label={label}
+              className="h-9 w-14 cursor-pointer p-1"
+              value={style[field]}
+              onChange={(event) => set({ [field]: event.target.value, preset: style.preset as AnnouncementPreset })}
+            />
+          </Label>
+        ))}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Label className="space-y-2">
+          <span className="flex justify-between"><span>{style.titleSize}px</span><span>גודל כותרת</span></span>
+          <Input type="range" min={16} max={34} value={style.titleSize} onChange={(event) => set({ titleSize: Number(event.target.value) })} />
+        </Label>
+        <Label className="space-y-2">
+          <span className="flex justify-between"><span>{style.bodySize}px</span><span>גודל תוכן</span></span>
+          <Input type="range" min={12} max={24} value={style.bodySize} onChange={(event) => set({ bodySize: Number(event.target.value) })} />
+        </Label>
+        <div className="space-y-2">
+          <Label>יישור טקסט</Label>
+          <Select value={style.align} onValueChange={(align: "right" | "center") => set({ align })}>
+            <SelectTrigger aria-label="יישור טקסט"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="right">לימין</SelectItem>
+              <SelectItem value="center">למרכז</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Label className="flex items-center justify-between gap-3 rounded-xl border bg-white p-3">
+          <Switch checked={style.shadow} onCheckedChange={(shadow) => set({ shadow })} />
+          <span>צל עדין לכרטיס</span>
+        </Label>
+      </div>
+
+      <div>
+        <p className="mb-2 text-sm font-medium">תצוגה מקדימה חיה</p>
+        <article className="border p-4" style={announcementCardStyle(style)} data-testid="announcement-design-preview">
+          <div className={`text-xs font-medium opacity-70 ${style.align === "center" ? "text-center" : "text-right"}`} style={{ color: style.accent }}>תצוגת מודעה</div>
+          <h4 className="mt-2 font-semibold" style={{ fontSize: style.titleSize }}>{title || "כותרת המודעה"}</h4>
+          <p className="mt-1 whitespace-pre-line opacity-75" style={{ fontSize: style.bodySize }}>{body || "כאן יוצג תוכן המודעה כפי שיראו אותו באתר."}</p>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- מודעות ---------------- */
+
+export function AnnouncementsAdmin() {
+  const { data = [] } = useAnnouncements();
+  const qc = useQueryClient();
+  const save = useSaveRow("announcements", "announcements");
+  const remove = useDeleteRow("announcements", "announcements");
+  const [draft, setDraft] = useState<Partial<Announcement> | null>(null);
+  const [ordered, setOrdered] = useState<Announcement[]>([]);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [originalImagePath, setOriginalImagePath] = useState<string | null>(null);
+  const orderedRef = useRef<Announcement[]>([]);
+  const draggedIndexRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (draggedIndexRef.current !== null) return;
+    orderedRef.current = data;
+    setOrdered(data);
+  }, [data]);
+
+  async function persistOrder(items: Announcement[]) {
+    setSavingOrder(true);
+    const results = await Promise.all(
+      items.map((announcement, index) =>
+        supabase
+          .from("announcements")
+          .update({ sort_order: (index + 1) * 10 })
+          .eq("community_id", communityId())
+          .eq("id", announcement.id),
+      ),
+    );
+    setSavingOrder(false);
+    const failure = results.find((result) => result.error)?.error;
+    if (failure) {
+      toast.error("שמירת סדר המודעות נכשלה");
+      await qc.invalidateQueries({ queryKey: ["announcements"] });
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["announcements"] });
+    toast.success("סדר המודעות נשמר");
+  }
+
+  function beginPointerDrag(index: number, pointerId: number) {
+    if (savingOrder) return;
+    const initialOrder = orderedRef.current.map((item) => item.id).join(",");
+    draggedIndexRef.current = index;
+    setDraggedId(orderedRef.current[index]?.id ?? null);
+
+    const move = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      event.preventDefault();
+      const target = document
+        .elementFromPoint(event.clientX, event.clientY)
+        ?.closest<HTMLElement>("[data-announcement-index]");
+      const targetIndex = Number(target?.dataset.announcementIndex);
+      const currentIndex = draggedIndexRef.current;
+      if (!Number.isInteger(targetIndex) || currentIndex === null || targetIndex === currentIndex)
+        return;
+      const next = reorder(orderedRef.current, currentIndex, targetIndex);
+      orderedRef.current = next;
+      draggedIndexRef.current = targetIndex;
+      setOrdered(next);
+    };
+
+    const cleanup = () => {
+      draggedIndexRef.current = null;
+      setDraggedId(null);
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", finish);
+      document.removeEventListener("pointercancel", cancel);
+    };
+
+    const finish = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      const finalItems = orderedRef.current;
+      const changed = finalItems.map((item) => item.id).join(",") !== initialOrder;
+      cleanup();
+      if (changed) void persistOrder(finalItems);
+    };
+
+    const cancel = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      orderedRef.current = data;
+      setOrdered(data);
+      cleanup();
+    };
+
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", finish);
+    document.addEventListener("pointercancel", cancel);
+  }
+
+  function editAnnouncement(announcement: Announcement) {
+    setOriginalImagePath(announcement.image_path);
+    setDraft(announcement);
+  }
+
+  function createAnnouncement() {
+    setOriginalImagePath(null);
+    setDraft({
+      kind: "mazal_tov",
+      title: "",
+      body: "",
+      pinned: false,
+      notification_enabled: false,
+      show_on_home: true,
+      home_width: "half",
+      image_url: null,
+      image_path: null,
+      sort_order: (ordered.length + 1) * 10,
+      style: presetAnnouncementStyle("classic") as Announcement["style"],
+    });
+  }
+
+  async function discardDraft() {
+    if (draft?.image_path && draft.image_path !== originalImagePath) {
+      await supabase.storage.from("community-media").remove([draft.image_path]);
+    }
+    setDraft(null);
+    setOriginalImagePath(null);
+  }
+
+  async function uploadAnnouncementImage(file: File) {
+    if (!draft) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("אפשר להעלות קובץ תמונה בלבד");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("התמונה גדולה מדי. הגודל המרבי הוא 5MB");
+      return;
+    }
+    setUploadingImage(true);
+    if(LOCAL_STUDIO){
+      try { setDraft({...draft,image_path:null,image_url:await localImage(file)});toast.success('התמונה מוכנה. לחצו שמירה כדי לשמור אותה מקומית'); }
+      catch { toast.error('קריאת התמונה נכשלה'); }
+      finally { setUploadingImage(false); }
+      return;
+    }
+    const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const path = `announcements/${crypto.randomUUID()}.${extension}`;
+    const { error } = await supabase.storage
+      .from("community-media")
+      .upload(path, file, { cacheControl: "3600", upsert: false });
+    if (error) {
+      setUploadingImage(false);
+      toast.error(error.message || "העלאת התמונה נכשלה");
+      return;
+    }
+    if (draft.image_path && draft.image_path !== originalImagePath) {
+      await supabase.storage.from("community-media").remove([draft.image_path]);
+    }
+    const { data: publicImage } = supabase.storage.from("community-media").getPublicUrl(path);
+    setDraft({ ...draft, image_path: path, image_url: publicImage.publicUrl });
+    setUploadingImage(false);
+    toast.success("התמונה הועלתה. לחצו שמירה כדי לפרסם אותה");
+  }
+
+  async function removeDraftImage() {
+    if (!draft) return;
+    if (draft.image_path && draft.image_path !== originalImagePath) {
+      await supabase.storage.from("community-media").remove([draft.image_path]);
+    }
+    setDraft({ ...draft, image_url: null, image_path: null });
+  }
+
+  function deleteAnnouncement(announcement: Announcement) {
+    remove.mutate(announcement.id, {
+      onSuccess: () => {
+        if (announcement.image_path) {
+          void supabase.storage.from("community-media").remove([announcement.image_path]);
+        }
+      },
+    });
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button
+          onClick={createAnnouncement}
+        >
+          <Plus className="size-4" /> מודעה חדשה
+        </Button>
+      </div>
+
+      <p className="text-sm text-muted-foreground">
+        גררו את הידית שליד מודעה כדי לקבוע מה תופיע ראשונה, שנייה וכן הלאה. הסדר נשמר מיד.
+      </p>
+      <div className="card-elev divide-y divide-border" data-testid="announcements-sort-list">
+        {ordered.length === 0 && <p className="p-6 text-center text-muted-foreground">אין מודעות.</p>}
+        {ordered.map((announcement, index) => (
+          <div
+            key={announcement.id}
+            data-announcement-index={index}
+            data-testid={`announcement-row-${announcement.id}`}
+            className={
+              "flex items-center gap-2 px-3 py-3 transition-opacity " +
+              (draggedId === announcement.id ? "opacity-55" : "")
+            }
+          >
+            <button
+              type="button"
+              data-testid={`announcement-drag-${announcement.id}`}
+              className="touch-none cursor-grab rounded-md p-2 text-muted-foreground hover:bg-muted active:cursor-grabbing"
+              aria-label={`גרירת המודעה ${announcement.title}`}
+              title="גרור לשינוי סדר המודעות"
+              disabled={savingOrder}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                beginPointerDrag(index, event.pointerId);
+              }}
+            >
+              <GripVertical className="size-5" />
+            </button>
+            <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
+              {index + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium">{announcement.title}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {ANNOUNCEMENT_KINDS.find((kind) => kind.id === announcement.kind)?.label ?? ""}
+                {announcement.expires_at ? ` · בתוקף עד ${announcement.expires_at}` : ""}
+                {` · ${announcement.show_on_home ? "מופיעה גם בדף הבית" : "רק בטאב מודעות"}`}
+              </p>
+            </div>
+            <Button size="icon" variant="ghost" onClick={() => editAnnouncement(announcement)} aria-label="עריכה">
+              <Pencil className="size-4" />
+            </Button>
+            <Button size="icon" variant="ghost" onClick={() => deleteAnnouncement(announcement)} aria-label="מחיקה">
+              <Trash2 className="size-4 text-destructive" />
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      {draft && (
+        <form
+          className="card-elev space-y-4 p-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save.mutate(
+              { ...draft, expires_at: draft.expires_at || null },
+              {
+                onSuccess: () => {
+                  if (originalImagePath && originalImagePath !== draft.image_path) {
+                    void supabase.storage.from("community-media").remove([originalImagePath]);
+                  }
+                  setDraft(null);
+                  setOriginalImagePath(null);
+                },
+              },
+            );
+          }}
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>סוג מודעה</Label>
+              <Select
+                value={draft.kind ?? "general"}
+                onValueChange={(v) => setDraft({ ...draft, kind: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ANNOUNCEMENT_KINDS.map((k) => (
+                    <SelectItem key={k.id} value={k.id}>
+                      {k.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>בתוקף עד (לא חובה)</Label>
+              <Input
+                type="date"
+                dir="ltr"
+                value={draft.expires_at ?? ""}
+                onChange={(e) => setDraft({ ...draft, expires_at: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>כותרת</Label>
+            <Input
+              required
+              value={draft.title ?? ""}
+              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              placeholder="מזל טוב למשפחת…"
+            />
+          </div>
+          <section className="space-y-3 rounded-xl border border-border p-4" data-testid="announcement-image-editor">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="font-semibold">תמונה למודעה</h3>
+                <p className="text-xs text-muted-foreground">JPG, PNG, WebP או GIF, עד 5MB.</p>
+              </div>
+              <Label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+                {uploadingImage ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
+                {draft.image_url ? "החלפת תמונה" : "הוספת תמונה"}
+                <Input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="sr-only"
+                  disabled={uploadingImage}
+                  data-testid="announcement-image-input"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void uploadAnnouncementImage(file);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </Label>
+            </div>
+            {draft.image_url && (
+              <div className="relative overflow-hidden rounded-xl border bg-muted" data-testid="announcement-image-preview">
+                <img src={draft.image_url} alt="תצוגה מקדימה של תמונת המודעה" className="max-h-72 w-full object-contain" />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="destructive"
+                  className="absolute left-2 top-2"
+                  aria-label="הסרת תמונת המודעה"
+                  onClick={() => void removeDraftImage()}
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
+            )}
+          </section>
+          <AnnouncementDesignEditor
+            value={draft.style}
+            title={draft.title ?? ""}
+            body={draft.body ?? ""}
+            onChange={(style) => setDraft({ ...draft, style: style as Announcement["style"] })}
+          />
+          <div className="space-y-2">
+            <Label>תוכן</Label>
+            <Textarea
+              rows={4}
+              value={draft.body ?? ""}
+              onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch
+              id="pinned"
+              checked={draft.pinned ?? false}
+              onCheckedChange={(v) => setDraft({ ...draft, pinned: v })}
+            />
+            <Label htmlFor="pinned">סימון כמודעה מוצמדת (הסדר נקבע בגרירה)</Label>
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch
+              id="announcement-show-on-home"
+              checked={draft.show_on_home ?? true}
+              onCheckedChange={(value) => setDraft({ ...draft, show_on_home: value })}
+            />
+            <Label htmlFor="announcement-show-on-home">להציג את המודעה גם בווידג׳ט בדף הבית</Label>
+          </div>
+          {draft.show_on_home && (
+            <div className="space-y-2 rounded-xl border border-border p-4">
+              <Label>רוחב המודעה בדף הבית</Label>
+              <Select
+                value={draft.home_width === "full" ? "full" : "half"}
+                onValueChange={(homeWidth) => setDraft({ ...draft, home_width: homeWidth })}
+              >
+                <SelectTrigger aria-label="רוחב המודעה בדף הבית" data-testid="announcement-home-width">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="full">רוחב מלא — מודעה אחת בשורה</SelectItem>
+                  <SelectItem value="half">חצי שורה — שתי מודעות זו לצד זו</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">במובייל המודעה תמיד תיפרס לרוחב המסך לקריאות טובה.</p>
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <Switch
+              id="announcement-notification"
+              checked={draft.notification_enabled ?? false}
+              onCheckedChange={(value) => setDraft({ ...draft, notification_enabled: value })}
+            />
+            <Label htmlFor="announcement-notification">לשלוח התראה למשתמשים שבחרו מודעות</Label>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" disabled={uploadingImage || save.isPending}>
+              {save.isPending && <Loader2 className="size-4 animate-spin" />}
+              {save.isPending ? "שומר…" : "שמירה"}
+            </Button>
+            <Button type="button" variant="ghost" disabled={uploadingImage} onClick={() => void discardDraft()}>
+              ביטול
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- שיעורים ---------------- */
+
+export function ShiurimAdmin() {
+  const { data = [] } = useShiurim();
+  const { data: categories = [] } = useShiurCategories();
+  const qc = useQueryClient();
+  const save = useSaveRow("shiurim", "shiurim");
+  const saveCategory = useSaveRow("shiur_categories", "shiur_categories");
+  const remove = useDeleteRow("shiurim", "shiurim");
+  const [draft, setDraft] = useState<Partial<Shiur> | null>(null);
+  const [categoryName, setCategoryName] = useState("");
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+
+  async function moveShiur(targetId: string) {
+    if (!draggedId || draggedId === targetId) return;
+    const ordered = [...data];
+    const from = ordered.findIndex((item) => item.id === draggedId);
+    const to = ordered.findIndex((item) => item.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = ordered.splice(from, 1);
+    ordered.splice(to, 0, moved!);
+    const results = await Promise.all(
+      ordered.map((item, index) =>
+        supabase
+          .from("shiurim")
+          .update({ sort_order: (index + 1) * 10 })
+          .eq("community_id", communityId())
+          .eq("id", item.id),
+      ),
+    );
+    setDraggedId(null);
+    const failure = results.find((result) => result.error)?.error;
+    if (failure) toast.error("שמירת סדר השיעורים נכשלה");
+    else {
+      await qc.invalidateQueries({ queryKey: ["shiurim"] });
+      toast.success("סדר השיעורים נשמר");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap justify-end gap-2">
+        <form
+          className="flex min-w-64 flex-1 gap-2 sm:max-w-md"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!categoryName.trim()) return;
+            saveCategory.mutate(
+              { name: categoryName.trim(), sort_order: categories.length * 10 },
+              { onSuccess: () => setCategoryName("") },
+            );
+          }}
+        >
+          <Input
+            aria-label="שם קטגוריה חדשה"
+            value={categoryName}
+            onChange={(event) => setCategoryName(event.target.value)}
+            placeholder="קטגוריה חדשה, למשל דף יומי"
+          />
+          <Button type="submit" variant="outline" disabled={!categoryName.trim()}>
+            <FolderPlus className="size-4" /> הוספה
+          </Button>
+        </form>
+        <Button
+          onClick={() =>
+            setDraft({
+              title: "",
+              teacher: "",
+              day_of_week: 0,
+              time_text: "",
+              location: "",
+              description: "",
+              category_id: null,
+              schedule_type: "weekly",
+              sort_order: 100,
+              active: true,
+              notification_enabled: false,
+              reminder_minutes: 15,
+            })
+          }
+        >
+          <Plus className="size-4" /> שיעור חדש
+        </Button>
+      </div>
+
+      <div className="card-elev divide-y divide-border">
+        {data.length === 0 && <p className="p-6 text-center text-muted-foreground">אין שיעורים.</p>}
+        {data.map((s) => (
+          <div
+            key={s.id}
+            draggable
+            data-testid={`shiur-row-${s.id}`}
+            onDragStart={() => setDraggedId(s.id)}
+            onDragEnd={() => setDraggedId(null)}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={() => moveShiur(s.id)}
+            className={
+              "flex items-center gap-2 px-3 py-3 " + (draggedId === s.id ? "opacity-50" : "")
+            }
+          >
+            <button
+              type="button"
+              className="cursor-grab touch-none p-2 text-muted-foreground"
+              aria-label={`גרירת ${s.title}`}
+            >
+              <GripVertical className="size-5" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium">{s.title}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {categories.find((category) => category.id === s.category_id)?.name ??
+                  "ללא קטגוריה"}
+                {` · ${s.schedule_type === "daily" ? "בכל יום" : `יום ${DAYS_HE[s.day_of_week]}`} · ${s.time_text} · ${s.teacher}`}
+              </p>
+            </div>
+            <Button size="icon" variant="ghost" onClick={() => setDraft(s)} aria-label="עריכה">
+              <Pencil className="size-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => remove.mutate(s.id)}
+              aria-label="מחיקה"
+            >
+              <Trash2 className="size-4 text-destructive" />
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      {draft && (
+        <form
+          className="card-elev space-y-4 p-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save.mutate({ ...draft }, { onSuccess: () => setDraft(null) });
+          }}
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>נושא השיעור</Label>
+              <Input
+                required
+                value={draft.title ?? ""}
+                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>מגיד השיעור</Label>
+              <Input
+                value={draft.teacher ?? ""}
+                onChange={(e) => setDraft({ ...draft, teacher: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>קטגוריה</Label>
+              <Select
+                value={draft.category_id ?? "none"}
+                onValueChange={(value) =>
+                  setDraft({ ...draft, category_id: value === "none" ? null : value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">ללא קטגוריה</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>תדירות</Label>
+              <Select
+                value={draft.schedule_type ?? "weekly"}
+                onValueChange={(value) => setDraft({ ...draft, schedule_type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">בכל יום</SelectItem>
+                  <SelectItem value="weekly">יום קבוע בשבוע</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>יום</Label>
+              <Select
+                disabled={draft.schedule_type === "daily"}
+                value={String(draft.day_of_week ?? 0)}
+                onValueChange={(v) => setDraft({ ...draft, day_of_week: Number(v) })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DAYS_HE.map((d, i) => (
+                    <SelectItem key={d} value={String(i)}>
+                      יום {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>שעה (טקסט חופשי)</Label>
+              <Input
+                value={draft.time_text ?? ""}
+                onChange={(e) => setDraft({ ...draft, time_text: e.target.value })}
+                placeholder="20:30 / אחרי מנחה"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>מיקום</Label>
+              <Input
+                value={draft.location ?? ""}
+                onChange={(e) => setDraft({ ...draft, location: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>סדר תצוגה</Label>
+              <Input
+                type="number"
+                dir="ltr"
+                value={draft.sort_order ?? 0}
+                onChange={(e) => setDraft({ ...draft, sort_order: Number(e.target.value) })}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>תיאור</Label>
+            <Textarea
+              rows={3}
+              value={draft.description ?? ""}
+              onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch
+              id="shiur-active"
+              checked={draft.active ?? true}
+              onCheckedChange={(v) => setDraft({ ...draft, active: v })}
+            />
+            <Label htmlFor="shiur-active">מוצג באתר</Label>
+          </div>
+          <div className="grid gap-4 rounded-xl border border-border p-4 sm:grid-cols-2">
+            <div className="flex items-center gap-3">
+              <Switch
+                id="shiur-notification"
+                checked={draft.notification_enabled ?? false}
+                onCheckedChange={(value) => setDraft({ ...draft, notification_enabled: value })}
+              />
+              <Label htmlFor="shiur-notification">לאפשר למשתמשים לקבל תזכורת</Label>
+            </div>
+            <div className="space-y-2">
+              <Label>כמה דקות לפני</Label>
+              <Input
+                type="number"
+                dir="ltr"
+                min={0}
+                max={10080}
+                disabled={!draft.notification_enabled}
+                value={draft.reminder_minutes ?? 15}
+                onChange={(event) =>
+                  setDraft({ ...draft, reminder_minutes: Number(event.target.value) })
+                }
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit">שמירה</Button>
+            <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
+              ביטול
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- חברותות ---------------- */
+
+export function ChavrutotAdmin() {
+  const { data = [] } = useChavrutot();
+  const save = useSaveRow("chavrutot", "chavrutot");
+  const remove = useDeleteRow("chavrutot", "chavrutot");
+  const [draft, setDraft] = useState<Partial<Chavruta> | null>(null);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button
+          onClick={() =>
+            setDraft({
+              topic: "",
+              partners: "",
+              time_text: "",
+              contact: "",
+              looking_for_partner: false,
+              notification_enabled: false,
+              sort_order: 100,
+              active: true,
+            })
+          }
+        >
+          <Plus className="size-4" /> חברותא חדשה
+        </Button>
+      </div>
+
+      <div className="card-elev divide-y divide-border">
+        {data.length === 0 && <p className="p-6 text-center text-muted-foreground">אין חברותות.</p>}
+        {data.map((c) => (
+          <RowShell
+            key={c.id}
+            title={c.topic}
+            subtitle={`${c.partners} · ${c.time_text}${
+              c.looking_for_partner ? " · מחפשים חברותא" : ""
+            }`}
+            onEdit={() => setDraft(c)}
+            onDelete={() => remove.mutate(c.id)}
+          />
+        ))}
+      </div>
+
+      {draft && (
+        <form
+          className="card-elev space-y-4 p-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save.mutate({ ...draft }, { onSuccess: () => setDraft(null) });
+          }}
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>נושא הלימוד</Label>
+              <Input
+                required
+                value={draft.topic ?? ""}
+                onChange={(e) => setDraft({ ...draft, topic: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>שמות הלומדים</Label>
+              <Input
+                value={draft.partners ?? ""}
+                onChange={(e) => setDraft({ ...draft, partners: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>זמן הלימוד</Label>
+              <Input
+                value={draft.time_text ?? ""}
+                onChange={(e) => setDraft({ ...draft, time_text: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>איש קשר</Label>
+              <Input
+                value={draft.contact ?? ""}
+                onChange={(e) => setDraft({ ...draft, contact: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="flex items-center gap-3">
+              <Switch
+                id="looking"
+                checked={draft.looking_for_partner ?? false}
+                onCheckedChange={(v) => setDraft({ ...draft, looking_for_partner: v })}
+              />
+              <Label htmlFor="looking">מחפשים חברותא</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch
+                id="chav-active"
+                checked={draft.active ?? true}
+                onCheckedChange={(v) => setDraft({ ...draft, active: v })}
+              />
+              <Label htmlFor="chav-active">מוצג באתר</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch
+                id="chav-notification"
+                checked={draft.notification_enabled ?? false}
+                onCheckedChange={(value) => setDraft({ ...draft, notification_enabled: value })}
+              />
+              <Label htmlFor="chav-notification">לשלוח התראה למשתמשים שבחרו חברותות</Label>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit">שמירה</Button>
+            <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
+              ביטול
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}

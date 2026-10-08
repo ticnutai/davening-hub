@@ -1,5 +1,4 @@
 import js from "@eslint/js";
-import eslintPluginPrettier from "eslint-plugin-prettier/recommended";
 import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
@@ -7,7 +6,18 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist", ".output", ".vinxi", "android", "src/integrations/supabase/types.ts"],
+    // Build output and generated native projects. Capacitor copies its own
+    // `native-bridge.js` into the Android build directory, and linting that
+    // vendored file reported an error against a rule this config disables.
+    ignores: [
+      "dist",
+      "dist-tv",
+      "dist-omer",
+      "android/**",
+      "android-tv/**",
+      "playwright-report",
+      "test-results",
+    ],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
@@ -22,37 +32,17 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "no-restricted-imports": [
-        "error",
-        {
-          paths: [
-            {
-              name: "server-only",
-              message:
-                "TanStack Start does not use the Next.js `server-only` package. Rename the module to `*.server.ts` or mark it with `@tanstack/react-start/server-only`.",
-            },
-          ],
-        },
-      ],
-      "react-refresh/only-export-components": [
-        "warn",
-        {
-          allowConstantExport: true,
-          allowExportNames: [
-            "badgeVariants",
-            "buttonVariants",
-            "navigationMenuTriggerStyle",
-            "DEFAULT_TEXT_SETTINGS",
-            "toggleVariants",
-            "useFormField",
-            "useSidebar",
-            "useTheme",
-            "useTextSettings",
-          ],
-        },
-      ],
+      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
     },
   },
-  eslintPluginPrettier,
+  {
+    // Playwright fixtures are plain functions that take a destructured bag and
+    // a `use` callback; the React hook rules read that as a misused hook.
+    files: ["e2e/**/*.ts"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+      "no-empty-pattern": "off",
+    },
+  },
 );

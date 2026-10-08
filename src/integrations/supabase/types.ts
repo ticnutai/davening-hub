@@ -10,78 +10,122 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
       admin_messages: {
         Row: {
           body: string
+          community_id: string
           created_at: string
           id: string
           is_read: boolean
           phone: string
+          sender_id: string | null
           sender_name: string
           subject: string
         }
         Insert: {
           body: string
+          community_id?: string
           created_at?: string
           id?: string
           is_read?: boolean
           phone?: string
+          sender_id?: string | null
           sender_name?: string
           subject?: string
         }
         Update: {
           body?: string
+          community_id?: string
           created_at?: string
           id?: string
           is_read?: boolean
           phone?: string
+          sender_id?: string | null
           sender_name?: string
           subject?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_messages_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       announcements: {
         Row: {
           body: string
+          community_id: string
           created_at: string
           expires_at: string | null
+          home_width: string
           id: string
+          image_path: string | null
+          image_url: string | null
           kind: string
           notification_enabled: boolean
           pinned: boolean
+          show_on_home: boolean
+          sort_order: number
+          style: Json
           title: string
           updated_at: string
         }
         Insert: {
           body?: string
+          community_id?: string
           created_at?: string
           expires_at?: string | null
+          home_width?: string
           id?: string
+          image_path?: string | null
+          image_url?: string | null
           kind?: string
           notification_enabled?: boolean
           pinned?: boolean
+          show_on_home?: boolean
+          sort_order?: number
+          style?: Json
           title: string
           updated_at?: string
         }
         Update: {
           body?: string
+          community_id?: string
           created_at?: string
           expires_at?: string | null
+          home_width?: string
           id?: string
+          image_path?: string | null
+          image_url?: string | null
           kind?: string
           notification_enabled?: boolean
           pinned?: boolean
+          show_on_home?: boolean
+          sort_order?: number
+          style?: Json
           title?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "announcements_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       app_themes: {
         Row: {
+          community_id: string
           created_at: string
           created_by: string
           id: string
@@ -90,6 +134,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          community_id?: string
           created_at?: string
           created_by?: string
           id?: string
@@ -98,6 +143,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          community_id?: string
           created_at?: string
           created_by?: string
           id?: string
@@ -105,11 +151,20 @@ export type Database = {
           theme?: Json
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "app_themes_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       chavruta_requests: {
         Row: {
           availability: string
+          community_id: string
           created_at: string
           email: string
           id: string
@@ -118,6 +173,7 @@ export type Database = {
           name: string
           notes: string
           phone: string
+          sender_id: string | null
           share_contact: boolean
           status: string
           study_format: string
@@ -126,6 +182,7 @@ export type Database = {
         }
         Insert: {
           availability?: string
+          community_id?: string
           created_at?: string
           email?: string
           id?: string
@@ -134,6 +191,7 @@ export type Database = {
           name: string
           notes?: string
           phone?: string
+          sender_id?: string | null
           share_contact?: boolean
           status?: string
           study_format?: string
@@ -142,6 +200,7 @@ export type Database = {
         }
         Update: {
           availability?: string
+          community_id?: string
           created_at?: string
           email?: string
           id?: string
@@ -150,17 +209,27 @@ export type Database = {
           name?: string
           notes?: string
           phone?: string
+          sender_id?: string | null
           share_contact?: boolean
           status?: string
           study_format?: string
           topic?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "chavruta_requests_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       chavrutot: {
         Row: {
           active: boolean
+          community_id: string
           contact: string
           created_at: string
           id: string
@@ -174,6 +243,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          community_id?: string
           contact?: string
           created_at?: string
           id?: string
@@ -187,6 +257,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          community_id?: string
           contact?: string
           created_at?: string
           id?: string
@@ -198,7 +269,15 @@ export type Database = {
           topic?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "chavrutot_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       commentaries: {
         Row: {
@@ -230,38 +309,76 @@ export type Database = {
         }
         Relationships: []
       }
+      communities: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+          slug: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          slug: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          slug?: string
+        }
+        Relationships: []
+      }
       home_widgets: {
         Row: {
+          community_id: string
           created_at: string
           id: string
           key: string
           kind: string
           label: string
+          layout_width: string
           sort_order: number
           updated_at: string
           visible: boolean
         }
         Insert: {
+          community_id?: string
           created_at?: string
           id?: string
           key: string
           kind?: string
           label: string
+          layout_width?: string
           sort_order?: number
           updated_at?: string
           visible?: boolean
         }
         Update: {
+          community_id?: string
           created_at?: string
           id?: string
           key?: string
           kind?: string
           label?: string
+          layout_width?: string
           sort_order?: number
           updated_at?: string
           visible?: boolean
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "home_widgets_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       learning_sessions: {
         Row: {
@@ -302,6 +419,39 @@ export type Database = {
         }
         Relationships: []
       }
+      logo_library: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          path: string | null
+          path_dark: string | null
+          url: string
+          url_dark: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          path?: string | null
+          path_dark?: string | null
+          url: string
+          url_dark?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          path?: string | null
+          path_dark?: string | null
+          url?: string
+          url_dark?: string | null
+        }
+        Relationships: []
+      }
       migration_logs: {
         Row: {
           error: string | null
@@ -335,6 +485,7 @@ export type Database = {
       minyan_categories: {
         Row: {
           active: boolean
+          community_id: string
           created_at: string
           display_mode: string
           id: string
@@ -348,6 +499,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          community_id?: string
           created_at?: string
           display_mode?: string
           id?: string
@@ -361,6 +513,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          community_id?: string
           created_at?: string
           display_mode?: string
           id?: string
@@ -372,12 +525,74 @@ export type Database = {
           visible_from?: string | null
           visible_until?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "minyan_categories_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      minyan_overrides: {
+        Row: {
+          at_time: string | null
+          cancelled: boolean
+          community_id: string
+          created_at: string
+          id: string
+          minyan_id: string
+          note: string
+          on_date: string
+          updated_at: string
+        }
+        Insert: {
+          at_time?: string | null
+          cancelled?: boolean
+          community_id: string
+          created_at?: string
+          id?: string
+          minyan_id: string
+          note?: string
+          on_date: string
+          updated_at?: string
+        }
+        Update: {
+          at_time?: string | null
+          cancelled?: boolean
+          community_id?: string
+          created_at?: string
+          id?: string
+          minyan_id?: string
+          note?: string
+          on_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "minyan_overrides_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "minyan_overrides_minyan_id_same_community_fkey"
+            columns: ["minyan_id", "community_id"]
+            isOneToOne: false
+            referencedRelation: "minyanim"
+            referencedColumns: ["id", "community_id"]
+          },
+        ]
       }
       minyanim: {
         Row: {
           active: boolean
+          active_from: string | null
+          active_until: string | null
           category_id: string | null
+          community_id: string
           created_at: string
           day_type: string
           fixed_time: string | null
@@ -396,7 +611,10 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          active_from?: string | null
+          active_until?: string | null
           category_id?: string | null
+          community_id?: string
           created_at?: string
           day_type?: string
           fixed_time?: string | null
@@ -415,7 +633,10 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          active_from?: string | null
+          active_until?: string | null
           category_id?: string | null
+          community_id?: string
           created_at?: string
           day_type?: string
           fixed_time?: string | null
@@ -434,10 +655,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "minyanim_category_id_fkey"
-            columns: ["category_id"]
+            foreignKeyName: "minyanim_category_id_same_community_fkey"
+            columns: ["category_id", "community_id"]
             isOneToOne: false
             referencedRelation: "minyan_categories"
+            referencedColumns: ["id", "community_id"]
+          },
+          {
+            foreignKeyName: "minyanim_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
             referencedColumns: ["id"]
           },
         ]
@@ -642,13 +870,28 @@ export type Database = {
           address: string
           candle_offset_minutes: number
           city: string
+          community_id: string
           created_at: string
           elevation: number
+          header_logo: string | null
+          home_header_variant: string
           id: string
+          karovim_logo_desktop_height: number
+          karovim_logo_desktop_offset_x: number
+          karovim_logo_desktop_offset_y: number
+          karovim_logo_desktop_width: number
+          karovim_logo_mobile_height: number
+          karovim_logo_mobile_offset_x: number
+          karovim_logo_mobile_offset_y: number
+          karovim_logo_mobile_width: number
           latitude: number
+          logos: Json
           longitude: number
+          minyan_days: string
+          minyan_layout: string | null
           name: string
           phone: string
+          shabbat_end_minutes: number
           subtitle: string
           theme: string
           tzeit_offset_minutes: number
@@ -658,13 +901,28 @@ export type Database = {
           address?: string
           candle_offset_minutes?: number
           city?: string
+          community_id?: string
           created_at?: string
           elevation?: number
+          header_logo?: string | null
+          home_header_variant?: string
           id?: string
+          karovim_logo_desktop_height?: number
+          karovim_logo_desktop_offset_x?: number
+          karovim_logo_desktop_offset_y?: number
+          karovim_logo_desktop_width?: number
+          karovim_logo_mobile_height?: number
+          karovim_logo_mobile_offset_x?: number
+          karovim_logo_mobile_offset_y?: number
+          karovim_logo_mobile_width?: number
           latitude?: number
+          logos?: Json
           longitude?: number
+          minyan_days?: string
+          minyan_layout?: string | null
           name?: string
           phone?: string
+          shabbat_end_minutes?: number
           subtitle?: string
           theme?: string
           tzeit_offset_minutes?: number
@@ -674,23 +932,47 @@ export type Database = {
           address?: string
           candle_offset_minutes?: number
           city?: string
+          community_id?: string
           created_at?: string
           elevation?: number
+          header_logo?: string | null
+          home_header_variant?: string
           id?: string
+          karovim_logo_desktop_height?: number
+          karovim_logo_desktop_offset_x?: number
+          karovim_logo_desktop_offset_y?: number
+          karovim_logo_desktop_width?: number
+          karovim_logo_mobile_height?: number
+          karovim_logo_mobile_offset_x?: number
+          karovim_logo_mobile_offset_y?: number
+          karovim_logo_mobile_width?: number
           latitude?: number
+          logos?: Json
           longitude?: number
+          minyan_days?: string
+          minyan_layout?: string | null
           name?: string
           phone?: string
+          shabbat_end_minutes?: number
           subtitle?: string
           theme?: string
           tzeit_offset_minutes?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "settings_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shiur_categories: {
         Row: {
           active: boolean
+          community_id: string
           created_at: string
           description: string
           id: string
@@ -700,6 +982,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          community_id?: string
           created_at?: string
           description?: string
           id?: string
@@ -709,6 +992,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          community_id?: string
           created_at?: string
           description?: string
           id?: string
@@ -716,12 +1000,21 @@ export type Database = {
           sort_order?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "shiur_categories_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shiurim: {
         Row: {
           active: boolean
           category_id: string | null
+          community_id: string
           created_at: string
           day_of_week: number
           description: string
@@ -739,6 +1032,7 @@ export type Database = {
         Insert: {
           active?: boolean
           category_id?: string | null
+          community_id?: string
           created_at?: string
           day_of_week?: number
           description?: string
@@ -756,6 +1050,7 @@ export type Database = {
         Update: {
           active?: boolean
           category_id?: string | null
+          community_id?: string
           created_at?: string
           day_of_week?: number
           description?: string
@@ -772,10 +1067,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "shiurim_category_id_fkey"
-            columns: ["category_id"]
+            foreignKeyName: "shiurim_category_id_same_community_fkey"
+            columns: ["category_id", "community_id"]
             isOneToOne: false
             referencedRelation: "shiur_categories"
+            referencedColumns: ["id", "community_id"]
+          },
+          {
+            foreignKeyName: "shiurim_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
             referencedColumns: ["id"]
           },
         ]
@@ -842,6 +1144,199 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      tv_commands: {
+        Row: {
+          command: string
+          created_at: string
+          created_by: string | null
+          device_id: string | null
+          id: number
+          payload: Json
+        }
+        Insert: {
+          command: string
+          created_at?: string
+          created_by?: string | null
+          device_id?: string | null
+          id?: never
+          payload?: Json
+        }
+        Update: {
+          command?: string
+          created_at?: string
+          created_by?: string | null
+          device_id?: string | null
+          id?: never
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tv_commands_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "tv_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tv_config: {
+        Row: {
+          community_id: string
+          config: Json
+          id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          community_id?: string
+          config?: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          community_id?: string
+          config?: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tv_config_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tv_devices: {
+        Row: {
+          app_version: string | null
+          approved: boolean
+          approved_at: string | null
+          community_id: string | null
+          created_at: string
+          id: string
+          info: Json
+          last_boot_at: string | null
+          last_seen_at: string | null
+          name: string
+          pairing_code: string | null
+          pairing_expires_at: string | null
+          secret_hash: string
+          state: Json
+        }
+        Insert: {
+          app_version?: string | null
+          approved?: boolean
+          approved_at?: string | null
+          community_id?: string | null
+          created_at?: string
+          id: string
+          info?: Json
+          last_boot_at?: string | null
+          last_seen_at?: string | null
+          name?: string
+          pairing_code?: string | null
+          pairing_expires_at?: string | null
+          secret_hash: string
+          state?: Json
+        }
+        Update: {
+          app_version?: string | null
+          approved?: boolean
+          approved_at?: string | null
+          community_id?: string | null
+          created_at?: string
+          id?: string
+          info?: Json
+          last_boot_at?: string | null
+          last_seen_at?: string | null
+          name?: string
+          pairing_code?: string | null
+          pairing_expires_at?: string | null
+          secret_hash?: string
+          state?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tv_devices_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tv_events: {
+        Row: {
+          details: Json
+          device_id: string
+          id: number
+          kind: string
+          level: string
+          message: string
+          occurred_at: string
+          received_at: string
+        }
+        Insert: {
+          details?: Json
+          device_id: string
+          id?: never
+          kind: string
+          level?: string
+          message?: string
+          occurred_at: string
+          received_at?: string
+        }
+        Update: {
+          details?: Json
+          device_id?: string
+          id?: never
+          kind?: string
+          level?: string
+          message?: string
+          occurred_at?: string
+          received_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tv_events_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "tv_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tv_snapshots: {
+        Row: {
+          captured_at: string
+          device_id: string
+          image: string
+        }
+        Insert: {
+          captured_at?: string
+          device_id: string
+          image: string
+        }
+        Update: {
+          captured_at?: string
+          device_id?: string
+          image?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tv_snapshots_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: true
+            referencedRelation: "tv_devices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_answers: {
         Row: {
@@ -1104,6 +1599,7 @@ export type Database = {
       }
       user_roles: {
         Row: {
+          community_id: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -1111,6 +1607,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          community_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -1118,13 +1615,22 @@ export type Database = {
           user_id: string
         }
         Update: {
+          community_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_settings: {
         Row: {
@@ -1256,6 +1762,23 @@ export type Database = {
         Returns: boolean
       }
       claim_admin: { Args: never; Returns: boolean }
+      communities_overview: {
+        Args: never
+        Returns: {
+          active: boolean
+          announcements: number
+          created_at: string
+          id: string
+          minyanim: number
+          name: string
+          screens: number
+          slug: string
+        }[]
+      }
+      create_community: {
+        Args: { p_name: string; p_slug?: string }
+        Returns: string
+      }
       execute_admin_migration: {
         Args: { p_name: string; p_statements: string[] }
         Returns: Json
@@ -1279,8 +1802,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_admin_of: { Args: { _community: string }; Returns: boolean }
+      is_platform_admin: { Args: never; Returns: boolean }
       list_approved_chavruta_requests: {
-        Args: never
+        Args: { p_community?: string }
         Returns: {
           availability: string
           created_at: string
@@ -1305,12 +1830,77 @@ export type Database = {
           user_id: string
         }[]
       }
+      my_communities: {
+        Args: never
+        Returns: {
+          active: boolean
+          id: string
+          name: string
+          slug: string
+        }[]
+      }
+      prune_minyan_overrides: { Args: never; Returns: number }
       set_user_role: {
         Args: {
           _grant: boolean
           _role: Database["public"]["Enums"]["app_role"]
           _target_user_id: string
         }
+        Returns: Json
+      }
+      sole_community: { Args: never; Returns: string }
+      tv_authenticate: {
+        Args: { p_device_id: string; p_secret: string }
+        Returns: {
+          app_version: string | null
+          approved: boolean
+          approved_at: string | null
+          community_id: string | null
+          created_at: string
+          id: string
+          info: Json
+          last_boot_at: string | null
+          last_seen_at: string | null
+          name: string
+          pairing_code: string | null
+          pairing_expires_at: string | null
+          secret_hash: string
+          state: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "tv_devices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      tv_claim: {
+        Args: { p_code: string; p_community?: string; p_name: string }
+        Returns: Json
+      }
+      tv_community: {
+        Args: { p_device_id: string; p_secret: string }
+        Returns: string
+      }
+      tv_heartbeat: {
+        Args: { p_device_id: string; p_secret: string; p_state?: Json }
+        Returns: Json
+      }
+      tv_log: {
+        Args: { p_device_id: string; p_events: Json; p_secret: string }
+        Returns: number
+      }
+      tv_new_pairing_code: { Args: never; Returns: string }
+      tv_put_snapshot: {
+        Args: { p_device_id: string; p_image: string; p_secret: string }
+        Returns: undefined
+      }
+      tv_register: {
+        Args: { p_device_id: string; p_info?: Json; p_secret: string }
+        Returns: Json
+      }
+      tv_set_community: {
+        Args: { p_community_id: string; p_device_id: string; p_secret: string }
         Returns: Json
       }
     }
@@ -1331,12 +1921,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1360,11 +1950,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1385,11 +1975,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1410,11 +2000,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1427,11 +2017,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

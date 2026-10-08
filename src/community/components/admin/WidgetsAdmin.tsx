@@ -1,0 +1,206 @@
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Columns2, GripVertical, Eye, EyeOff, PanelTop, Smartphone } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { supabase } from "@community/integrations/supabase/client";
+import { useHomeWidgets, type HomeWidget } from "@community/lib/data";
+import { communityId } from "@/community/lib/community";
+
+function reorder(list: HomeWidget[], from: number, to: number) {
+  const next = [...list];
+  const [moved] = next.splice(from, 1);
+  if (!moved) return list;
+  next.splice(to, 0, moved);
+  return next;
+}
+
+function WidgetList({
+  title,
+  hint,
+  items,
+  onChange,
+}: {
+  title: string;
+  hint: string;
+  items: HomeWidget[];
+  onChange: (items: HomeWidget[]) => void;
+}) {
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  function beginPointerDrag(index: number, pointerId: number) {
+    dragIndexRef.current = index;
+    setDragIndex(index);
+
+    const move = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      const target = document
+        .elementFromPoint(event.clientX, event.clientY)
+        ?.closest<HTMLElement>("[data-widget-index]");
+      const nextIndex = Number(target?.dataset.widgetIndex);
+      const currentIndex = dragIndexRef.current;
+      if (!Number.isInteger(nextIndex) || currentIndex === null || nextIndex === currentIndex)
+        return;
+      onChange(reorder(itemsRef.current, currentIndex, nextIndex));
+      dragIndexRef.current = nextIndex;
+      setDragIndex(nextIndex);
+    };
+
+    const end = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return;
+      dragIndexRef.current = null;
+      setDragIndex(null);
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", end);
+      document.removeEventListener("pointercancel", end);
+    };
+
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", end);
+    document.addEventListener("pointercancel", end);
+  }
+
+  return (
+    <div className="card-elev p-5">
+      <h3 className="text-lg font-semibold">{title}</h3>
+      <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
+      <ul className="mt-4 space-y-2">
+        {items.map((item, index) => (
+          <li
+            key={item.id}
+            data-widget-index={index}
+            data-widget-key={item.key}
+            className={
+              "flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 transition-opacity " +
+              (dragIndex === index ? "opacity-60" : "")
+            }
+          >
+            <button
+              type="button"
+              className="touch-none cursor-grab rounded-md p-2 text-muted-foreground hover:bg-muted active:cursor-grabbing"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                beginPointerDrag(index, event.pointerId);
+              }}
+              aria-label={`גרירת ${item.label}`}
+            >
+              <GripVertical className="size-5" />
+            </button>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.label}</span>
+            {item.kind === "section" && (
+              <Select
+                value={item.layout_width === "half" ? "half" : "full"}
+                onValueChange={(layoutWidth) =>
+                  onChange(
+                    items.map((widget) =>
+                      widget.id === item.id ? { ...widget, layout_width: layoutWidth } : widget,
+                    ),
+                  )
+                }
+              >
+                <SelectTrigger
+                  className="order-last h-9 w-full sm:order-none sm:w-[8.75rem]"
+                  aria-label={`רוחב ${item.label} בדף הבית`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="full">
+                    <span className="flex items-center gap-2"><PanelTop className="size-4" /> רוחב מלא</span>
+                  </SelectItem>
+                  <SelectItem value="half">
+                    <span className="flex items-center gap-2"><Columns2 className="size-4" /> חצי שורה</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            {item.visible ? (
+              <Eye className="size-4 text-muted-foreground" />
+            ) : (
+              <EyeOff className="size-4 text-muted-foreground" />
+            )}
+            <Switch
+              checked={item.visible}
+              onCheckedChange={(checked) =>
+                onChange(items.map((w) => (w.id === item.id ? { ...w, visible: checked } : w)))
+              }
+              aria-label={`הצגת ${item.label}`}
+            />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function WidgetsAdmin() {
+  const { data, isLoading } = useHomeWidgets();
+  const qc = useQueryClient();
+  const [sections, setSections] = useState<HomeWidget[]>([]);
+  const [zmanim, setZmanim] = useState<HomeWidget[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!data) return;
+    setSections(data.filter((w) => w.kind === "section"));
+    setZmanim(data.filter((w) => w.kind === "zman"));
+  }, [data]);
+
+  async function save() {
+    setSaving(true);
+    const rows = [...sections, ...zmanim].map((widget, index) => ({
+      id: widget.id,
+      key: widget.key,
+      label: widget.label,
+      kind: widget.kind,
+      visible: widget.visible,
+      layout_width: widget.layout_width === "half" ? "half" : "full",
+      sort_order: (index + 1) * 10,
+    }));
+    const { error } = await supabase.from("home_widgets")
+      .upsert(
+        rows.map((r) => ({ ...r, community_id: communityId() })),
+        { onConflict: "id" },
+      );
+    setSaving(false);
+    if (error) {
+      toast.error(error.message || "השמירה נכשלה");
+      return;
+    }
+    qc.invalidateQueries({ queryKey: ["home_widgets"] });
+    toast.success("סדר הווידג'טים נשמר לכל המשתמשים");
+  }
+
+  if (isLoading) return <p className="text-muted-foreground">טוען…</p>;
+
+  return (
+    <div className="space-y-4">
+      <WidgetList
+        title="מקטעי דף הבית"
+        hint="גררו לשינוי סדר, בחרו רוחב מלא או חצי שורה, וכבו כדי להסתיר מכל המתפללים."
+        items={sections}
+        onChange={setSections}
+      />
+      <WidgetList
+        title="זמני היום"
+        hint="בחרו אילו זמנים הלכתיים יוצגו ובאיזה סדר."
+        items={zmanim}
+        onChange={setZmanim}
+      />
+      <Button onClick={save} disabled={saving}>
+        <Smartphone className="size-4" /> שמירת תצוגת דף הבית
+      </Button>
+    </div>
+  );
+}

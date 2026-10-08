@@ -1,0 +1,179 @@
+/**
+ * A composed screen actually drawn, not merely computed.
+ *
+ * The tests next door prove that the right parts end up on the right screen.
+ * They would all still pass if the view that draws those parts threw on
+ * mount, which is not a theoretical worry here: a board once passed its type
+ * check and its unit tests and then died in the browser on a missing import,
+ * and the wall showed nothing. The admin preview needs a signed-in account,
+ * so this is where a composed screen gets mounted for real.
+ */
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import { zmanimFor } from "@community/lib/minyan-time";
+
+import { DEFAULT_TV_CONFIG, type Screen, type TvConfig } from "./config";
+import { SlideView } from "./TvSlides";
+import { buildSlides, type BoardData } from "./useBoardData";
+
+afterEach(cleanup);
+
+const now = new Date("2026-09-16T10:00:00+03:00");
+const z = zmanimFor(now, null);
+
+const data: BoardData = {
+  settings: null,
+  minyanim: [],
+  categories: [],
+  announcements: [],
+  shiurim: [],
+  overrides: [],
+  stale: false,
+  anyLoaded: true,
+  sync: { status: "live", lastSyncedAt: null },
+};
+
+function draw(screens: Screen[]) {
+  const config: TvConfig = { ...structuredClone(DEFAULT_TV_CONFIG), screens };
+  const slide = buildSlides(data, config, now, z)[0];
+  if (slide.kind !== "composed") throw new Error(`expected a composed screen, got ${slide.kind}`);
+  return { slide, ...render(<SlideView slide={slide} now={now} zmanim={z} paused={false} />) };
+}
+
+describe("drawing a composed screen", () => {
+  it("mounts, which is the part a type check cannot promise", () => {
+    const { container } = draw([
+      { id: "a", name: "הלוח", seconds: 0, blocks: [{ block: "prayers" }, { block: "zmanim" }] },
+    ]);
+    expect(container.querySelector(".tv-composed")).toBeTruthy();
+    expect(container.querySelector('[data-screen="a"]')).toBeTruthy();
+  });
+
+  it("puts both blocks on the wall, each drawn by the view that always drew it", () => {
+    const { container } = draw([
+      { id: "a", name: "הלוח", seconds: 0, blocks: [{ block: "prayers" }, { block: "zmanim" }] },
+    ]);
+    const cells = container.querySelectorAll(".tv-composed-cell");
+    expect(cells.length).toBe(2);
+    // The zmanim panel is the same panel as everywhere else - it names the
+    // day's times - so finding one of them is finding the real component.
+    expect(screen.getByText("זמני היום")).toBeTruthy();
+    expect(screen.getByText("זמני התפילות")).toBeTruthy();
+  });
+
+  it("makes every block a box, so a shape, a background and a frame reach it", () => {
+    // Reported: the box shape changed the zmanim and left the prayer times
+    // alone, because the prayer times were drawn with no box around them.
+    const { container } = draw([
+      { id: "a", name: "הלוח", seconds: 0, blocks: [{ block: "prayers" }, { block: "zmanim" }] },
+    ]);
+    expect(container.querySelector('.tv-composed-cell.tv-panel[data-frame="prayers"]')).toBeTruthy();
+    expect(container.querySelector('.tv-panel[data-frame="zmanim"]')).toBeTruthy();
+  });
+
+  it("does not show the zmanim twice when the screen has both blocks", () => {
+    // The first thing a composed screen drew had two zmanim panels on it: the
+    // prayer panel carries its own in most layouts, and the zmanim block drew
+    // another beside it. Exactly the duplication this change is about, so it
+    // is held down here rather than remembered.
+    draw([{ id: "a", name: "הלוח", seconds: 0, blocks: [{ block: "prayers" }, { block: "zmanim" }] }]);
+    expect(screen.getAllByText("זמני היום")).toHaveLength(1);
+  });
+
+  it("keeps the prayer panel's own zmanim when there is no zmanim block", () => {
+    draw([{ id: "a", name: "הלוח", seconds: 0, blocks: [{ block: "prayers" }] }]);
+    expect(screen.getAllByText("זמני היום")).toHaveLength(1);
+  });
+
+  it("stands them side by side, which is what the composer's sketch showed", () => {
+    const { container } = draw([
+      { id: "a", name: "הלוח", seconds: 0, blocks: [{ block: "prayers" }, { block: "zmanim" }] },
+    ]);
+    const rows = container.querySelectorAll(".tv-composed-row");
+    expect(rows.length).toBe(1);
+    expect(within(rows[0] as HTMLElement).getAllByText(/./).length).toBeGreaterThan(0);
+    expect((rows[0] as HTMLElement).style.gridTemplateColumns).toBe("minmax(0, 1fr) minmax(0, 1fr)");
+  });
+
+  it("gives a pinned block its own side", () => {
+    const { container } = draw([
+      {
+        id: "a",
+        name: "הלוח",
+        seconds: 0,
+        blocks: [{ block: "zmanim", area: "right" }, { block: "prayers", area: "left" }],
+      },
+    ]);
+    const row = container.querySelector(".tv-composed-row") as HTMLElement;
+    expect(row.style.gridTemplateColumns).toBe("minmax(0, 1fr) minmax(0, 1fr)");
+    expect(container.querySelectorAll(".tv-composed-cell").length).toBe(2);
+  });
+
+  it("one block takes the screen on its own", () => {
+    const { container } = draw([{ id: "a", name: "הלוח", seconds: 0, blocks: [{ block: "learning" }] }]);
+    const row = container.querySelector(".tv-composed-row") as HTMLElement;
+    expect(row.style.gridTemplateColumns).toBe("minmax(0, 1fr)");
+  });
+});
+
+describe("a day that needed more than one screen", () => {
+  it("says which screen this is, so nobody thinks his minyan was left off", () => {
+    // The split itself is held down next door; what matters on the wall is
+    // that somebody standing in front of it can see there is another screen.
+    const many = {
+      ...structuredClone(DEFAULT_TV_CONFIG),
+      prayerRowsPerScreen: 2,
+      screens: [{ id: "a", name: "הלוח", seconds: 40, blocks: [{ block: "prayers" as const }] }],
+    };
+    const slides = buildSlides(
+      {
+        ...data,
+        minyanim: [
+          { id: "1", label: "שחרית א׳", prayer: "shacharit", active: true, day_type: "weekday", time_mode: "fixed", fixed_time: "06:00", category_id: null, sort_order: 1 },
+          { id: "2", label: "שחרית ב׳", prayer: "shacharit", active: true, day_type: "weekday", time_mode: "fixed", fixed_time: "07:00", category_id: null, sort_order: 2 },
+          { id: "3", label: "מנחה", prayer: "mincha", active: true, day_type: "weekday", time_mode: "fixed", fixed_time: "13:00", category_id: null, sort_order: 3 },
+        ] as unknown as BoardData["minyanim"],
+      },
+      many,
+      now,
+      z,
+    );
+    const first = slides[0];
+    if (first.kind !== "composed") throw new Error("expected a composed screen");
+    const prayer = first.parts.find((p) => p.block === "prayers")?.slide;
+    if (!prayer || prayer.kind !== "prayer") throw new Error("expected a prayer slide");
+    expect(prayer.pages).toBeGreaterThan(1);
+
+    render(<SlideView slide={prayer} now={now} zmanim={z} paused={false} />);
+    expect(screen.getByText(/מתוך/)).toBeTruthy();
+  });
+});
+
+describe("a screen arranged by hand", () => {
+  it("draws its rows with the widths and heights the sketch gave them", () => {
+    const { container } = render(
+      <SlideView
+        slide={{
+          id: "screen:a",
+          kind: "composed",
+          seconds: 20,
+          layout: "composed",
+          screen: {
+            id: "a",
+            name: "הלוח",
+            seconds: 20,
+            blocks: [{ block: "prayers" }, { block: "zmanim" }],
+            grid: [{ blocks: ["zmanim", "prayers"], widths: [2, 1], height: 1.5 }],
+          },
+          parts: [{ block: "prayers" }, { block: "zmanim" }],
+        }}
+        now={new Date("2026-10-14T10:00:00+03:00")}
+        zmanim={zmanimFor(new Date("2026-10-14T12:00:00+03:00"), null)}
+        paused={false}
+      />,
+    );
+    const section = container.querySelector<HTMLElement>(".tv-composed")!;
+    expect(section.style.gridTemplateRows).toBe("minmax(0, 1.5fr)");
+    expect(container.querySelector<HTMLElement>(".tv-composed-row")!.style.gridTemplateColumns).toBe("minmax(0, 2fr) minmax(0, 1fr)");
+  });
+});

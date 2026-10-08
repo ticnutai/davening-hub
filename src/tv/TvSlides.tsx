@@ -1,0 +1,678 @@
+import {useDeadlines, DeadlineCard} from './DeadlineContext';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { AutoScroll } from "./AutoScroll";
+import { SCROLLING_BLOCKS } from "./overflowContext";
+import { useHolyEndMinutes } from "./holyEnd";
+import { prayerLabel, type Announcement, type Shiur } from "@community/lib/data";
+import type { ResolvedMinyan } from "@community/lib/minyan-time";
+import { formatTime, ZMAN_LABELS, type Zmanim } from "@community/lib/zmanim";
+import { SHOWN_ZMANIM, useBoardEdit, type BoardEditApi } from "./boardEdit";
+import { specialZmanim } from "@community/lib/specialDays";
+import type { BlockId, FlipArea } from "./config";
+import type { FrameId } from "./frameLooks";
+import { dafYomi, upcomingDays, weeklyParasha } from "./learning";
+import { composedLayout, jerusalemMinutes, minyanNow, shiurMinutes, type BoardSlide } from "./useBoardData";
+import { tracks } from "./grid";
+import { useFitText } from "./useFitText";
+import { useShrinkToFit } from "./useShrinkToFit";
+import { OccasionFrame } from "./OccasionCard";
+
+/**
+ * The slide bodies. Pure presentation: everything they need arrives as props,
+ * so the admin preview can render any slide, in any layout, at any time.
+ *
+ * Wording, hidden elements and swapped panels come from the admin through
+ * useBoardEdit() (boardEdit.ts); `edit.attr(key)` marks an element for the
+ * editor's click-to-edit and renders nothing on the TV.
+ */
+
+/** Column-flowing two-column grid needs an explicit row count to fill column by column. */
+function twoColRows(n: number) {
+  return n > 7 ? { gridTemplateRows: `repeat(${Math.ceil(n / 2)}, minmax(0, 1fr))` } : undefined;
+}
+
+function untilLabel(minutes: number): string {
+  if (minutes <= 0) return "מתחיל עכשיו";
+  if (minutes < 60) return `בעוד ${minutes} דק׳`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `בעוד ${h === 1 ? "שעה" : `${h} שע׳`}${m ? ` ו־${m} דק׳` : ""}`;
+}
+
+/**
+ * Side-by-side panels: drops the hidden ones, swaps the order when the admin
+ * moved them, and gives the grid matching column widths - as --cols, so the
+ * portrait layout (tv.css) can still force a single column.
+ */
+function panelGrid(
+  edit: BoardEditApi,
+  area: FlipArea,
+  panels: Array<{ key: string; width: number; node: ReactNode }>,
+): { style: CSSProperties; nodes: ReactNode[] } {
+  const shown = panels.filter((p) => !edit.hidden(p.key));
+  const ordered = edit.flipped(area) ? [...shown].reverse() : shown;
+  return {
+    style: { "--cols": ordered.map((p) => `${p.width}fr`).join(" ") || "1fr" } as CSSProperties,
+    nodes: ordered.map((p) => <PanelSlot key={p.key}>{p.node}</PanelSlot>),
+  };
+}
+
+function PanelSlot({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
+
+function SlideHeading({ k, fallback, children }: { k: string; fallback: string; children?: ReactNode }) {
+  const edit = useBoardEdit();
+  if (edit.hidden(k)) return null;
+  return (
+    <h2 className="tv-slide-heading" {...edit.attr(k)}>
+      {edit.text(k, fallback)} {children}
+    </h2>
+  );
+}
+
+export function SlideView({
+  slide,
+  now,
+  zmanim,
+  paused,
+}: {
+  slide: BoardSlide;
+  /** Minute precision is all a slide body needs (see TvBoard). */
+  now: Date;
+  zmanim: Zmanim;
+  paused: boolean;
+}) {
+  switch (slide.kind) {
+    case "prayer":
+      return <PrayerSlide slide={slide} now={now} zmanim={zmanim} />;
+    case "learning":
+      return <LearningSlide layout={slide.layout} now={now} national={slide.national ?? false} />;
+    case "announcements":
+      return <AnnouncementsSlide slide={slide} />;
+    case "shiurim":
+      return <ShiurimSlide slide={slide} now={now} />;
+    case "slideshow":
+      return <SlideshowSlide slide={slide} paused={paused} />;
+    case "occasion":
+      // Drawn over the whole board by TvBoard, like a picture; the stage beneath stays empty.
+      return <section className="tv-slide" aria-hidden />;
+    case "composed":
+      return <ComposedSlide slide={slide} now={now} zmanim={zmanim} paused={paused} />;
+  }
+}
+
+/* ---------------------------------------------------------------- composed */
+
+/**
+ * A screen the gabbai built: several blocks standing together.
+ *
+ * Each block is drawn by the view that already draws it, so a prayer panel
+ * here is the same prayer panel as on its own screen and gains no second
+ * implementation to drift from the first. The only thing this adds is the
+ * arrangement, which comes from `place()` - the one rule shared with the
+ * composer's sketch, so what the admin arranged is what the wall shows.
+ */
+/**
+ * The blocks that are a box of their own on a composed screen. Their views
+ * draw a list with no box around it, so a shape, a background or a frame had
+ * nothing to land on: on the boards built in the composer, only the zmanim -
+ * which draw their own panel - changed. Now the cell is the box.
+ */
+const CELL_FRAME: Partial<Record<BlockId, FrameId>> = {
+  prayers: "prayers",
+  announcements: "announcements",
+  shiurim: "shiurim",
+  learning: "learning",
+};
+
+function ComposedSlide({
+  slide,
+  now,
+  zmanim,
+  paused,
+}: {
+  slide: Extract<BoardSlide, { kind: "composed" }>;
+  now: Date;
+  zmanim: Zmanim;
+  paused: boolean;
+}) {
+  const rows = composedLayout(slide.parts, slide.screen.grid);
+  const edit = useBoardEdit();
+  return (
+    <section
+      className="tv-slide tv-composed"
+      data-screen={slide.screen.id}
+      style={{ gridTemplateRows: tracks(rows.map((r) => r.height)) }}
+    >
+      {rows.map((row, i) => (
+        <div key={i} className="tv-composed-row" style={{ gridTemplateColumns: tracks(row.widths) }}>
+          {row.parts.map((part, j) => {
+            // A box added by hand is a box of its own, dressed by its own id.
+            const frame = CELL_FRAME[part.block] ?? (part.custom ? (part.block as FrameId) : undefined);
+            return (
+            <div
+              key={`${part.block}-${j}`}
+              className={`tv-composed-cell${frame ? " tv-panel is-cell-box" : ""}`}
+              {...(frame ? edit.frame(frame) : {})}
+            >
+              <AutoScroll enabled={SCROLLING_BLOCKS.includes(part.block)}>
+                {part.custom ? (
+                  <CustomBoxView title={part.custom.title} text={part.custom.text} />
+                ) : part.block === "zmanim" ? (
+                  <ZmanimPanel zmanim={zmanim} now={now} />
+                ) : part.slide?.kind === "occasion" ? (
+                  <OccasionFrame slide={part.slide} />
+                ) : part.slide ? (
+                  <SlideView slide={part.slide} now={now} zmanim={zmanim} paused={paused} />
+                ) : null}
+              </AutoScroll>
+            </div>
+            );
+          })}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/**
+ * A box the gabbai added by hand: a title and the text as written, line
+ * breaks and all, shrunk to fit its box before it would be cut.
+ */
+export function CustomBoxView({ title, text }: { title: string; text: string }) {
+  const ref = useShrinkToFit<HTMLDivElement>(`${title}:${text}`);
+  return (
+    <>
+      {title && <h3 className="tv-panel-title">{title}</h3>}
+      <div className="tv-custom-text" ref={ref}>
+        {text}
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ prayer */
+
+function PrayerSlide({
+  slide,
+  now,
+  zmanim,
+}: {
+  slide: Extract<BoardSlide, { kind: "prayer" }>;
+  now: Date;
+  zmanim: Zmanim;
+}) {
+  const edit = useBoardEdit();
+  const nowMin = jerusalemMinutes(now);
+  const today = slide.isToday !== false;
+  const { next: nextIndex, past } = minyanNow(slide.rows, now, today);
+  // "המניין הבא בגדול" means nothing on another day: that day is its list.
+  const layout = !today && slide.layout === "next" ? "split" : slide.layout;
+  const heading = (
+    <SlideHeading k="heading.prayer" fallback="זמני התפילות">
+      {slide.title && <small>{slide.title}</small>}
+      {/*
+        Said out loud when the day needed more than one screen, so nobody
+        standing in front of the board wonders whether his minyan was left
+        off it - he can see there is another screen coming.
+      */}
+      {(slide.pages ?? 1) > 1 && (
+        <small>
+          {slide.page} מתוך {slide.pages}
+        </small>
+      )}
+    </SlideHeading>
+  );
+  const zmanimPanel = { key: "panel.zmanim", width: 1, node: <ZmanimPanel zmanim={zmanim} now={now} /> };
+  const label = (r: ResolvedMinyan) => <span {...edit.attr(`minyan:${r.minyan.id}:label`)}>{r.minyan.label}</span>;
+  const deadline=useDeadlines()[0];
+  if(deadline?.stage==='panel') return <section className="tv-slide">{heading}<div className="tv-prayer-grid"><div className="tv-panel" {...edit.frame('prayers')}><DeadlineCard alert={deadline}/></div><ZmanimPanel zmanim={zmanim} now={now}/></div></section>;
+
+  if (slide.rows.length === 0) {
+    // `timeline` is the prayer panel without zmanim of its own, because
+    // something beside it is already showing them - the split board's side
+    // column, or a composed screen's zmanim block. This branch used to add
+    // them regardless, so a board with no minyanim today showed the day's
+    // times twice next to each other.
+    const grid = panelGrid(edit, "prayer", [
+      { key: "panel.minyanim-empty", width: 1.4, node: <div className="tv-panel tv-empty" {...edit.frame("prayers")}>לא הוגדרו מניינים להיום</div> },
+      ...(layout === "timeline" ? [] : [zmanimPanel]),
+    ]);
+    return (
+      <section className="tv-slide">
+        {heading}
+        <div className="tv-prayer-grid" style={grid.style}>
+          {grid.nodes}
+        </div>
+      </section>
+    );
+  }
+
+  if (layout === "next") {
+    const next = nextIndex >= 0 ? slide.rows[nextIndex] : null;
+    const rest = slide.rows.filter((_, i) => i !== nextIndex && (nextIndex < 0 || i > nextIndex)).slice(0, 6);
+    const hero = (
+      <div className="tv-panel tv-hero" {...edit.frame("next", next ? `minyan:${next.minyan.id}` : "hero.kicker")}>
+        {next ? (
+          <>
+            <div className="tv-hero-kicker" {...edit.attr("hero.kicker")}>
+              {edit.text("hero.kicker", "המניין הבא")} · {prayerLabel(slide.subcategories, next.minyan.prayer)}
+            </div>
+            <div className="tv-hero-title">{label(next)}</div>
+            <div className="tv-hero-time">{next.time}</div>
+            <div className="tv-hero-until">{untilLabel(next.minutes - nowMin)}</div>
+            {(next.minyan.room || next.minyan.note) && (
+              <div className="tv-hero-meta">{[next.minyan.room, next.minyan.note].filter(Boolean).join(" · ")}</div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="tv-hero-kicker">להיום</div>
+            <div className="tv-hero-title">המניינים הסתיימו</div>
+            <div className="tv-hero-meta">להתראות מחר</div>
+          </>
+        )}
+        {rest.length > 0 && (
+          // After the last minyan these are the day's earlier ones - seen on
+          // the TV listed under "המניינים הסתיימו" as if still to come.
+          <div className="tv-chip-row">
+            {!next && <span className="tv-chip-caption">היום היו:</span>}
+            {rest.map((r) => (
+              <div key={r.minyan.id} className={`tv-chip${next ? "" : " is-past"}`} {...edit.attr(`minyan:${r.minyan.id}`)}>
+                <span className="tv-chip-time">{r.time}</span>
+                {label(r)}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+    const grid = panelGrid(edit, "prayer", [{ key: "panel.hero", width: 1.7, node: hero }, zmanimPanel]);
+    return (
+      <section className="tv-slide">
+        {heading}
+        <div className="tv-next-grid" style={grid.style}>
+          {grid.nodes}
+        </div>
+      </section>
+    );
+  }
+
+  if (layout === "timeline") {
+    return (
+      <section className="tv-slide">
+        {heading}
+        <ol className={`tv-timeline${slide.rows.length > 7 ? " is-two-col" : ""}`} style={twoColRows(slide.rows.length)}>
+          {slide.rows.map((r, i) => (
+            <li
+              key={r.minyan.id}
+              className={`tv-tl-row${i === nextIndex ? " is-next" : ""}${past(i) ? " is-past" : ""}`}
+              {...edit.attr(`minyan:${r.minyan.id}`)}
+            >
+              <span className="tv-tl-dot" />
+              <span className="tv-tl-time">{r.time}</span>
+              <span className="tv-tl-body">
+                <span className="tv-tl-kind">{prayerLabel(slide.subcategories, r.minyan.prayer)}</span>
+                <span className="tv-tl-name">{label(r)}</span>
+              </span>
+              {i === nextIndex && <span className="tv-badge">הבא</span>}
+            </li>
+          ))}
+        </ol>
+      </section>
+    );
+  }
+
+  // split
+  const minyanim = (
+    <div className="tv-panel" {...edit.frame("prayers")}>
+      {!edit.hidden("panel.minyanim") && (
+        <h3 className="tv-panel-title" {...edit.attr("panel.minyanim")}>
+          {edit.text("panel.minyanim", "מניינים")}
+        </h3>
+      )}
+      <ul className={`tv-minyan-list${slide.rows.length > 7 ? " is-two-col" : ""}`} style={twoColRows(slide.rows.length)}>
+        {slide.rows.map((r: ResolvedMinyan, i) => (
+          <li
+            key={r.minyan.id}
+            className={`tv-minyan-row${i === nextIndex ? " is-next" : ""}${past(i) ? " is-past" : ""}`}
+            {...edit.attr(`minyan:${r.minyan.id}`)}
+          >
+            <span className="tv-minyan-name">
+              {label(r)}
+              {i === nextIndex && <span className="tv-badge">הבא</span>}
+              <span className="tv-minyan-source">{r.source}</span>
+            </span>
+            <span className="tv-minyan-time">{r.time}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+  const grid = panelGrid(edit, "prayer", [{ key: "panel.minyanim-list", width: 1.4, node: minyanim }, zmanimPanel]);
+  return (
+    <section className="tv-slide">
+      {heading}
+      <div className="tv-prayer-grid" style={grid.style}>
+        {grid.nodes}
+      </div>
+    </section>
+  );
+}
+
+export function ZmanimPanel({ zmanim, now, titleKey = "panel.zmanim" }: { zmanim: Zmanim; now: Date; titleKey?: string }) {
+  const deadlines=useDeadlines();
+  const edit = useBoardEdit();
+  const nowMs = now.getTime();
+  const shown = SHOWN_ZMANIM.filter((e) => !edit.hidden(`zman.${e}`));
+  const nextEvent = shown.find((e) => (zmanim[e]?.getTime() ?? 0) > nowMs);
+  // A fast's start and end, candle lighting before a festival, צאת החג.
+  const special = specialZmanim(now, zmanim, useHolyEndMinutes());
+  // Measured against the panel, since the box's fonts are not the ones the
+  // board was laid out with (see useShrinkToFit).
+  const listRef = useShrinkToFit<HTMLDListElement>(`${special.length}:${shown.length}`);
+  return (
+    <div className="tv-panel" {...edit.frame("zmanim", "panel.zmanim")}>
+      <h3 className="tv-panel-title" {...(titleKey !== "panel.zmanim" ? edit.attr(titleKey) : {})}>
+        {edit.text(titleKey, "זמני היום")}
+      </h3>
+      <dl className="tv-zman-list" ref={listRef}>
+        {special.map((r) => (
+          <div className={`tv-zman-row is-special${r.time && r.time.getTime() <= nowMs ? " is-past" : ""}`} key={`special-${r.key}`}>
+            <dt>{r.label}</dt>
+            <dd>{formatTime(r.time)}</dd>
+          </div>
+        ))}
+        {shown.map((event) => {
+          const t = zmanim[event];
+          const past = t ? t.getTime() <= nowMs : false;
+          return (
+            <div
+              className={`tv-zman-row${deadlines.some(a=>a.event===event)?' tv-zman-warning':''}${event === nextEvent ? " is-next" : ""}${past ? " is-past" : ""}`}
+              data-zman={event}
+              key={event}
+              {...edit.attr(`zman.${event}`)}
+            >
+              <dt>{edit.text(`zman.${event}`, ZMAN_LABELS[event])}</dt>
+              <dd>{formatTime(t)}</dd>
+            </div>
+          );
+        })}
+      </dl>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- learning */
+
+function whenLabel(inDays: number, date: Date): string {
+  const weekday = new Intl.DateTimeFormat("he-IL", { weekday: "long" }).format(date);
+  if (inDays === 0) return "היום";
+  if (inDays === 1) return `מחר · ${weekday}`;
+  if (inDays === 2) return `מחרתיים · ${weekday}`;
+  return `${weekday} · בעוד ${inDays} ימים`;
+}
+
+function LearningSlide({ layout, now, national }: { layout: string; now: Date; national: boolean }) {
+  const edit = useBoardEdit();
+  const dayKey = now.toDateString();
+  const facts = useMemo(() => {
+    const day = new Date(dayKey);
+    return { parasha: weeklyParasha(day), daf: dafYomi(day), upcoming: upcomingDays(day, 21, 6, { national }) };
+  }, [dayKey, national]);
+
+  const parashaName = facts.parasha?.replace(/^פרשת\s+/, "") ?? "—";
+  const parashaLabel = edit.text("learning.parasha", "פרשת השבוע");
+  const dafLabel = edit.text("learning.daf", "הדף היומי");
+
+  if (layout === "hero") {
+    return (
+      <section className="tv-slide tv-learning-hero">
+        {!edit.hidden("learning.parasha") && (
+          <>
+            <div className="tv-hero-kicker" {...edit.attr("learning.parasha")}>
+              {parashaLabel}
+            </div>
+            <div className="tv-parasha-huge" {...edit.attr("learning.parasha")}>
+              {parashaName}
+            </div>
+          </>
+        )}
+        <div className="tv-learning-strip">
+          {facts.daf && !edit.hidden("learning.daf") && (
+            <div className="tv-panel tv-mini" {...edit.frame("learning", "learning.daf")}>
+              <span className="tv-mini-label">{dafLabel}</span>
+              <span className="tv-mini-value">{facts.daf.label}</span>
+            </div>
+          )}
+          {!edit.hidden("learning.upcoming") &&
+            facts.upcoming.slice(0, 3).map((u) => (
+              <div key={u.title + u.inDays} className={`tv-panel tv-mini${u.major ? " is-major" : ""}`} {...edit.frame("learning", "learning.upcoming")}>
+                <span className="tv-mini-label">{whenLabel(u.inDays, u.date)}</span>
+                <span className="tv-mini-value">{u.title}</span>
+              </div>
+            ))}
+        </div>
+      </section>
+    );
+  }
+
+  const grid = panelGrid(edit, "learning", [
+    {
+      key: "learning.parasha",
+      width: 1,
+      node: (
+        <div className="tv-panel tv-feature" {...edit.frame("learning", "learning.parasha")}>
+          <span className="tv-feature-label">{parashaLabel}</span>
+          <span className="tv-feature-value">{parashaName}</span>
+        </div>
+      ),
+    },
+    {
+      key: "learning.daf",
+      width: 1,
+      node: (
+        <div className="tv-panel tv-feature" {...edit.frame("learning", "learning.daf")}>
+          <span className="tv-feature-label">{dafLabel}</span>
+          <span className="tv-feature-value">{facts.daf?.label ?? "—"}</span>
+        </div>
+      ),
+    },
+    {
+      key: "learning.upcoming",
+      width: 1.25,
+      node: (
+        <div className="tv-panel tv-upcoming" {...edit.frame("learning", "learning.upcoming")}>
+          <h3 className="tv-panel-title">{edit.text("learning.upcoming", "בימים הקרובים")}</h3>
+          {facts.upcoming.length === 0 ? (
+            <p className="tv-empty">אין מועדים בשלושת השבועות הקרובים</p>
+          ) : (
+            <WholeLines watch={facts.upcoming.map((u) => u.title + u.inDays).join()}>
+              {facts.upcoming.map((u) => (
+                <li key={u.title + u.inDays} className={u.major ? "is-major" : ""}>
+                  <span className="tv-up-title">{u.title}</span>
+                  <span className="tv-up-when">{whenLabel(u.inDays, u.date)}</span>
+                </li>
+              ))}
+            </WholeLines>
+          )}
+        </div>
+      ),
+    },
+  ]);
+
+  return (
+    <section className="tv-slide">
+      <SlideHeading k="heading.learning" fallback="לימוד יומי ולוח שנה" />
+      <div className="tv-learning-grid" style={grid.style}>
+        {grid.nodes}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * A list that shows only the lines that fit whole, from the top: the nearest
+ * first, and none cut in half. "בימים הקרובים" lists three weeks of days, and
+ * in a small frame the last showed its title with its date sliced off below
+ * (אהל אברהם, 2.10.2026: "שמיני עצרת", and half of "מחר · יום שבת").
+ */
+function WholeLines({ watch, children }: { watch: string; children: ReactNode }) {
+  const ref = useRef<HTMLUListElement>(null);
+  useLayoutEffect(() => {
+    const list = ref.current;
+    if (!list) return;
+    const fit = () => {
+      const lines = [...list.children] as HTMLElement[];
+      for (const li of lines) li.hidden = false;
+      // Never less than one: an empty frame says less than a tight one.
+      for (let n = lines.length - 1; n > 0 && list.scrollHeight > list.clientHeight + 1; n--) lines[n].hidden = true;
+    };
+    fit();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(fit);
+    ro.observe(list);
+    return () => ro.disconnect();
+  }, [watch]);
+  return (
+    <ul ref={ref} className="is-whole-lines">
+      {children}
+    </ul>
+  );
+}
+
+/* ----------------------------------------------------------- announcements */
+
+export function AnnouncementCard({ item, large }: { item: Announcement; large?: boolean }) {
+  const edit = useBoardEdit();
+  // A long notice is shrunk to fit rather than cut off (see useFitText).
+  const fit = useFitText<HTMLDivElement>(`${item.id}:${item.title}:${item.body}:${large}`);
+  return (
+    <article
+      className={`tv-card${item.pinned ? " is-pinned" : ""}${large ? " is-large" : ""}${item.image_url ? " has-image" : ""}`}
+      {...edit.frame("announcements", `ann:${item.id}`)}
+    >
+      {item.image_url && <img className="tv-card-image" src={item.image_url} alt="" decoding="async" />}
+      <div className="tv-card-text" ref={fit}>
+        <h3 className="tv-card-title" {...edit.attr(`ann:${item.id}:title`)}>
+          {item.title}
+        </h3>
+        <p className="tv-card-body" {...edit.attr(`ann:${item.id}:body`)}>
+          {item.body}
+        </p>
+      </div>
+    </article>
+  );
+}
+
+function AnnouncementsSlide({ slide }: { slide: Extract<BoardSlide, { kind: "announcements" }> }) {
+  const spotlight = slide.layout === "spotlight";
+  return (
+    <section className="tv-slide">
+      <SlideHeading k="heading.announcements" fallback="מודעות לציבור">
+        {slide.pages > 1 && (
+          <small>
+            {slide.page} מתוך {slide.pages}
+          </small>
+        )}
+      </SlideHeading>
+      {spotlight ? (
+        <div className="tv-spotlight">{slide.items[0] && <AnnouncementCard item={slide.items[0]} large />}</div>
+      ) : (
+        <div className="tv-cards" data-count={slide.items.length}>
+          {slide.items.map((a) => (
+            <AnnouncementCard key={a.id} item={a} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ----------------------------------------------------------------- shiurim */
+
+function ShiurimSlide({ slide, now }: { slide: Extract<BoardSlide, { kind: "shiurim" }>; now: Date }) {
+  const edit = useBoardEdit();
+  const nowMin = jerusalemMinutes(now);
+  const nextIndex = slide.items.findIndex((s) => shiurMinutes(s.time_text) >= nowMin);
+  const state = (s: Shiur, i: number) =>
+    `${i === nextIndex ? " is-next" : ""}${shiurMinutes(s.time_text) < nowMin ? " is-past" : ""}`;
+  const title = (s: Shiur) => <span {...edit.attr(`shiur:${s.id}:title`)}>{s.title}</span>;
+  const teacher = (s: Shiur) => (
+    <span className="tv-shiur-teacher" {...edit.attr(`shiur:${s.id}:teacher`)}>
+      {s.teacher}
+    </span>
+  );
+
+  return (
+    <section className="tv-slide">
+      <SlideHeading k="heading.shiurim" fallback="שיעורי תורה">
+        <small>היום</small>
+      </SlideHeading>
+      {slide.layout === "cards" ? (
+        <div className="tv-shiur-cards">
+          {slide.items.map((s, i) => (
+            <article key={s.id} className={`tv-panel tv-shiur-card${state(s, i)}`} {...edit.frame("shiurim", `shiur:${s.id}`)}>
+              <span className="tv-shiur-time">{s.time_text}</span>
+              <span className="tv-shiur-title">{title(s)}</span>
+              {teacher(s)}
+              {s.location && <span className="tv-shiur-meta">{s.location}</span>}
+            </article>
+          ))}
+        </div>
+      ) : (
+        <ul className="tv-shiur-list">
+          {slide.items.map((s, i) => (
+            <li className={`tv-shiur-row${state(s, i)}`} key={s.id} {...edit.attr(`shiur:${s.id}`)}>
+              <span className="tv-shiur-time">{s.time_text}</span>
+              <span>
+                <span className="tv-shiur-title">
+                  {title(s)}
+                  {i === nextIndex && <span className="tv-badge">הבא</span>}
+                </span>
+                {(s.location || s.description) && (
+                  <span className="tv-shiur-meta">{[s.location, s.description].filter(Boolean).join(" · ")}</span>
+                )}
+              </span>
+              {teacher(s)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/* --------------------------------------------------------------- slideshow */
+
+function SlideshowSlide({
+  slide,
+  paused,
+}: {
+  slide: Extract<BoardSlide, { kind: "slideshow" }>;
+  paused: boolean;
+}) {
+  const n = slide.images.length;
+  const [active, setActive] = useState(0);
+  // Own timer, restarted per pass (the slide is re-keyed each time it shows).
+  useEffect(() => {
+    if (paused || n <= 1) return;
+    const id = window.setInterval(() => setActive((a) => Math.min(n - 1, a + 1)), slide.secondsPerImage * 1000);
+    return () => window.clearInterval(id);
+  }, [paused, n, slide.secondsPerImage]);
+  return (
+    <section className={`tv-slide tv-slideshow is-${slide.layout}`}>
+      {slide.images.map((img, i) => (
+        <figure
+          key={img.url + i}
+          className={`tv-show-item${i === active ? " is-active" : ""}`}
+          style={{ animationDuration: `${slide.secondsPerImage + 2}s` }}
+        >
+          <img src={img.url} alt="" decoding="async" />
+          {img.caption && <figcaption>{img.caption}</figcaption>}
+        </figure>
+      ))}
+    </section>
+  );
+}

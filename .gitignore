@@ -9,6 +9,16 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-tv
+dist-live
+dist-store
+dist-omer
+dist-new-shul/
+android-new-shul/.gradle/
+android-new-shul/build/
+android-new-shul/app/build/
+android-new-shul/app/src/main/assets/www/
+android-new-shul/local.properties
 dist-ssr
 .output
 .vinxi
@@ -19,6 +29,8 @@ dist-ssr
 # Android release credentials (machine-local only)
 android/app/*.keystore
 android/app/signing.properties
+android-tv/app/*.keystore
+android-tv/app/signing.properties
 scripts/google-play-service-account.json
 
 # Playwright QA artifacts
@@ -46,3 +58,11 @@ shul-mobile-*.png
 *.sw?
 play-store-assets/*-raw.png
 play-store-assets/*-1080x1920.png
+
+# Content backups taken before migrations — data, not code.
+backups/
+shots/
+
+# Screens photographed for diagnosis - evidence, not code.
+snap-*.png
+wall.png

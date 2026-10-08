@@ -1,0 +1,140 @@
+{
+  "site": "https://shul-hub.lovable.app",
+  "community": "בדיקת New Shul — דמו 06.10",
+  "date": "2026-10-07",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "themes": [
+    {
+      "id": "ivorylight",
+      "name": "אבן ואור",
+      "layers": 22,
+      "saved": true,
+      "reloaded": true,
+      "content": true
+    },
+    {
+      "id": "sukkotroyal",
+      "name": "סוכות מלכותי",
+      "layers": 24,
+      "saved": true,
+      "reloaded": true,
+      "content": true
+    },
+    {
+      "id": "sukkahwarm",
+      "name": "סוכה ירושלמית",
+      "layers": 24,
+      "saved": true,
+      "reloaded": true,
+      "content": true
+    },
+    {
+      "id": "azuregallery",
+      "name": "תכלת גאומטרי",
+      "layers": 23,
+      "saved": true,
+      "reloaded": true,
+      "content": true
+    },
+    {
+      "id": "scrollstudy",
+      "name": "קלף וספר",
+      "layers": 23,
+      "saved": true,
+      "reloaded": true,
+      "content": true
+    },
+    {
+      "id": "garnetcourt",
+      "name": "רימוני ארגמן",
+      "layers": 23,
+      "saved": true,
+      "reloaded": true,
+      "content": true
+    },
+    {
+      "id": "bronzegates",
+      "name": "שערי נחושת",
+      "layers": 23,
+      "saved": true,
+      "reloaded": true,
+      "content": true
+    },
+    {
+      "id": "shabbatpeace",
+      "name": "שבת של שלום",
+      "layers": 24,
+      "saved": true,
+      "reloaded": true,
+      "content": true
+    },
+    {
+      "id": "chanukahlight",
+      "name": "אור החנוכה",
+      "layers": 24,
+      "saved": true,
+      "reloaded": true,
+      "content": true
+    },
+    {
+      "id": "shofarvoice",
+      "name": "קול שופר",
+      "layers": 24,
+      "saved": true,
+      "reloaded": true,
+      "content": true
+    },
+    {
+      "id": "shavuottorah",
+      "name": "מתן תורה",
+      "layers": 24,
+      "saved": true,
+      "reloaded": true,
+      "content": true
+    },
+    {
+      "id": "purimjoy",
+      "name": "שמחת פורים",
+      "layers": 24,
+      "saved": true,
+      "reloaded": true,
+      "content": true
+    },
+    {
+      "id": "pesachfreedom",
+      "name": "פסח של חירות",
+      "layers": 24,
+      "saved": true,
+      "reloaded": true,
+      "content": true
+    }
+  ],
+  "finalTheme": "shabbatpeace",
+  "librarySets": [
+    {
+      "name": "New Shul — מסגרות",
+      "count": 4
+    },
+    {
+      "name": "New Shul — מילויים",
+      "count": 4
+    },
+    {
+      "name": "New Shul — עיטורים",
+      "count": 14
+    },
+    {
+      "name": "New Shul — עמודים",
+      "count": 2
+    },
+    {
+      "name": "New Shul — שבת וחגים",
+      "count": 16
+    }
+  ],
+  "independentMoveResizePersisted": true,
+  "frameHidePreservesContent": true
+}

@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        Android TV requirements. Without the leanback feature and the
+        LEANBACK_LAUNCHER category below, this package installs but never
+        appears on the TV home screen, which is the only launcher the device
+        has.
+    -->
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="true" />
+
+    <!-- A television has no touchscreen; declaring it required would make the
+         app ineligible for every TV device. -->
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+    <!--
+        allowBackup is false, and this is not a detail.
+
+        It was true - the default - and a reinstall today showed what that
+        means here. Android had quietly kept a copy of this app's data from
+        when the box served the main synagogue, and restored it: the screen
+        came back up carrying a device identity from a community it no longer
+        belongs to, one whose row no longer exists on the server. It looked
+        like a working board. It was the wrong board.
+
+        The identity is a device id and a secret that the server keeps only as
+        a hash, so it lives in exactly one place: this box. That is what makes
+        a cloud copy of it dangerous rather than useful. The backup follows a
+        Google account, not a device, so a second box set up under the same
+        account would be handed this screen's secret and two screens would
+        claim one row, each overwriting the other's heartbeat.
+
+        There is nothing here worth restoring anyway: everything a board shows
+        it re-fetches, and pairing a screen takes a code and under a minute.
+        A clean install that asks to be paired is the honest outcome.
+    -->
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:banner="@drawable/tv_banner"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <!-- LAUNCHER is kept so the package can also be started from a
+                     sideloading tool or a file manager during setup. -->
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+
+        </activity>
+
+        <!-- Restores the board after a power cut. `directBootAware` lets it run
+             before the device is unlocked, which is when a TV box boots. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Starts the board afresh every night at 03:45. Only the app's own
+             alarm sends this, so it is not exported. -->
+        <receiver
+            android:name=".NightlyRestart"
+            android:exported="false" />
+
+        <!-- Opens the board again when it is not on the screen. The alarm is
+             held by the system, so it fires - and starts the process - even
+             after Android has taken the app. This is the only thing here that
+             can bring back a board that died while nobody was looking. -->
+        <receiver
+            android:name=".Keepalive"
+            android:exported="false" />
+
+        <!-- Android's answer to a silent self-update (AutoUpdate). -->
+        <receiver
+            android:name=".InstallResult"
+            android:exported="false" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+    </application>
+
+    <!-- Permissions -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- The board installs its own updates (ApkUpdater): Android still shows its
+         installer and waits for OK on the remote. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- From Android 12: the board may update ITSELF without a person pressing
+         OK (AutoUpdate, at night). Older Android ignores this and asks. -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+    <!-- Read so the display can tell "the server is down" from "this TV lost
+         Wi-Fi", and reconnect promptly when the link returns. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- The board must stay readable indefinitely; without this the system
+         dims and then blanks the screen. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Lets BootReceiver bring the board back after a power cut. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Receiving BOOT_COMPLETED is not enough on its own. Since Android 10 an
+         app in the background may not open an activity, and the system drops
+         the attempt SILENTLY (seen on the device: "Background activity launch
+         blocked ... BAL_BLOCK", no exception reaches the app). Holding "display
+         over other apps" is one of the documented exemptions. A TV has no
+         convenient screen to grant it, so it is granted once over ADB:
+           node scripts/tv-control.mjs autostart -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+</manifest>

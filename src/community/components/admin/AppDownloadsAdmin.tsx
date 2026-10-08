@@ -1,0 +1,1 @@
+export function AppDownloadsAdmin(){return <div dir="rtl" className="rounded border p-4">מתקיני Android ו־TV לפרויקט החדש עדיין לא פורסמו. השתמשו באתר; קישורים יתווספו לאחר בנייה ובדיקה של מתקין המתחבר למסד החדש בלבד.</div>;}

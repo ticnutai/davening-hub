@@ -1,0 +1,253 @@
+import { describe, expect, it } from "vitest";
+import { nextDatesOf, specialDaysOn, specialZmanim, todaysCategories, eventSystemKey } from "./specialDays";
+import type { Zmanim } from "./zmanim";
+
+/** Noon in Israel on a calendar day. */
+const il = (day: string) => new Date(`${day}T09:00:00Z`);
+const keys = (day: string) => specialDaysOn(il(day)).map((d) => d.key);
+
+const z = (): Zmanim => {
+  const at = (h: number) => new Date(Date.UTC(2026, 0, 1, h));
+  return {
+    alot: at(2), misheyakir: at(3), sunrise: at(4), sof_zman_shma: at(6), sof_zman_tefila: at(7),
+    chatzot: at(9), mincha_gedola: at(10), plag: at(13), candle: at(14), sunset: at(15), tzeit: at(16),
+  };
+};
+
+const cat = (id: string, system_key: string | null, extra: Partial<{ active: boolean; visible_from: string | null; visible_until: string | null }> = {}) => ({
+  id, system_key, active: true, visible_from: null, visible_until: null, ...extra,
+});
+
+describe("special days (Israel calendar)", () => {
+  it("knows the festivals, fasts and Shabbatot of 5787", () => {
+    expect(keys("2026-09-21")).toEqual(["yom_kippur"]);
+    expect(keys("2026-09-20")).toEqual(["erev_yom_kippur"]);
+    expect(keys("2026-09-12")).toContain("rosh_hashana");
+    expect(keys("2026-09-13")).toContain("rosh_hashana");
+    expect(keys("2026-09-14")).toEqual(["tzom_gedaliah"]);
+    expect(keys("2026-09-19")).toEqual(["shabbat_shuva"]);
+    expect(keys("2026-09-28")).toEqual(["chol_hamoed_sukkot"]);
+    expect(keys("2026-10-02")).toEqual(["hoshana_raba"]);
+    expect(keys("2026-10-03")).toEqual(["shmini_atzeret"]);
+    expect(keys("2026-12-10")).toEqual(expect.arrayContaining(["chanukah", "rosh_chodesh"]));
+    expect(keys("2027-03-22")).toEqual(["taanit_esther", "erev_purim"]);
+    expect(keys("2027-08-12")).toEqual(["tisha_bav"]);
+    expect(keys("2027-05-12")).toEqual(["yom_haatzmaut"]);
+    expect(keys("2026-10-20")).toEqual([]);
+  });
+
+  it("finds the next date of a day, every year again", () => {
+    expect(nextDatesOf("yom_kippur", il("2026-09-25"))).toEqual(["2027-10-11"]);
+    expect(nextDatesOf("tzom_gedaliah", il("2026-09-01"))).toEqual(["2026-09-14"]);
+    expect(nextDatesOf("chanukah", il("2026-11-01"), 8)).toHaveLength(8);
+  });
+});
+
+describe("today's timetable tabs", () => {
+  const weekday = cat("w", "weekday");
+  const friday = cat("f", "friday");
+  const shabbat = cat("s", "shabbat");
+  const selichot = cat("x", null);
+  const yk = cat("yk", eventSystemKey("yom_kippur"));
+  const gedaliah = cat("g", eventSystemKey("tzom_gedaliah"));
+  const all = [weekday, friday, shabbat, selichot, yk, gedaliah];
+
+  it("replaces the ordinary tab on a day that has its own", () => {
+    const t = todaysCategories(all, il("2026-09-14"));
+    expect(t.event?.key).toBe("tzom_gedaliah");
+    expect(t.categories.map((c) => c.id)).toEqual(["g", "x"]);
+    expect(t.preferred?.id).toBe("g");
+  });
+
+  it("keeps the ordinary tabs, and never an event's, on any other day", () => {
+    const t = todaysCategories(all, il("2026-10-20"));
+    expect(t.event).toBeNull();
+    expect(t.categories.map((c) => c.id)).toEqual(["w", "f", "s", "x"]);
+    expect(t.preferred?.id).toBe("w");
+  });
+
+  it("uses the Shabbat tab on Saturday when there is one, and the weekday one when not", () => {
+    expect(todaysCategories(all, il("2026-10-24")).preferred?.id).toBe("s");
+    expect(todaysCategories([weekday, friday], il("2026-10-24")).preferred?.id).toBe("w");
+  });
+
+  it("ignores a special day whose tab is switched off", () => {
+    const off = [weekday, cat("g", eventSystemKey("tzom_gedaliah"), { active: false })];
+    expect(todaysCategories(off, il("2026-09-14")).event).toBeNull();
+  });
+
+  it("never lets a national day replace the timetable", () => {
+    const t = todaysCategories([weekday, cat("n", eventSystemKey("yom_haatzmaut"))], il("2027-05-12"));
+    expect(t.event).toBeNull();
+    expect(t.preferred?.id).toBe("w");
+  });
+});
+
+describe("the day's own times", () => {
+  const labels = (day: string) => specialZmanim(il(day), z()).map((r) => [r.label, r.time?.getUTCHours()]);
+
+  it("gives a minor fast its start and end", () => {
+    expect(labels("2026-09-14")).toEqual([["תחילת הצום", 2], ["סוף הצום", 16]]);
+  });
+
+  it("gives Yom Kippur candle lighting on the eve and the end of the fast on the day", () => {
+    expect(labels("2026-09-20")).toEqual([["הדלקת נרות · תחילת הצום", 14]]);
+    expect(labels("2026-09-21")).toEqual([["צאת החג וסוף הצום", 16]]);
+  });
+
+  it("gives a festival its end, and its eve candle lighting", () => {
+    expect(labels("2026-10-03")).toEqual([["צאת השבת והחג", 16]]); // שמיני עצרת בשבת
+    expect(labels("2027-04-27")).toEqual([["הדלקת נרות", 14]]); // ערב שביעי של פסח, יום שלישי
+    expect(labels("2026-10-02")).toEqual([]); // הושענא רבה ביום שישי: הדלקת נרות היא של שבת
+  });
+
+  it("has nothing extra on an ordinary day or a national one", () => {
+    expect(labels("2026-10-20")).toEqual([]);
+    expect(labels("2027-05-12")).toEqual([]);
+  });
+});
+
+describe("next dates of all special days", () => {
+  it("agrees with the one-by-one lookup", async () => {
+    const { nextDatesAll } = await import("./specialDays");
+    const all = nextDatesAll(il("2026-09-25"));
+    expect(all.yom_kippur).toBe("2027-10-11");
+    expect(all.chol_hamoed_sukkot).toBe("2026-09-27");
+    expect(all.chanukah).toBe("2026-12-05"); // 25 Kislev; the 24th is only the eve
+    expect(all.tisha_bav).toBe(nextDatesOf("tisha_bav", il("2026-09-25"))[0]);
+  });
+});
+
+describe("days that meet, and their verses", () => {
+  it("names a festival on Shabbat as one day", async () => {
+    const { combinedDay, specialDayByKey } = await import("./specialDays");
+    expect(combinedDay(specialDayByKey("sukkot")!, il("2026-09-26"))).toMatchObject({ title: "שבת · סוכות", shabbat: true });
+    expect(combinedDay(specialDayByKey("chol_hamoed_pesach")!, il("2027-04-24")).title).toBe("שבת חול המועד פסח");
+    // A special Shabbat is Shabbat already.
+    expect(combinedDay(specialDayByKey("shabbat_shuva")!, il("2026-09-19"))).toMatchObject({ title: "שבת שובה", shabbat: false });
+    // On a weekday nothing is added.
+    expect(combinedDay(specialDayByKey("tzom_gedaliah")!, il("2026-09-14"))).toMatchObject({ title: "צום גדליה", also: [] });
+  });
+
+  it("lists the other days of the date on a second line", async () => {
+    const { combinedDay, specialDayByKey } = await import("./specialDays");
+    expect(combinedDay(specialDayByKey("chanukah")!, il("2026-12-10")).also).toContain("ראש חודש");
+  });
+
+  it("has a verse with its source for the festivals and fasts", async () => {
+    const { verseFor, SPECIAL_DAYS } = await import("./specialDays");
+    for (const d of SPECIAL_DAYS.filter((d) => ["noraim", "sukkot", "pesach_shavuot", "fasts"].includes(d.group))) {
+      if (d.key === "taanit_bechorot") continue;
+      const v = verseFor(d.key);
+      expect(v?.text.length, d.key).toBeGreaterThan(5);
+      expect(v?.source, d.key).toMatch(/^[א-ת]+ [א-ת]+(, [א-ת״׳"-]+)?/);
+    }
+    expect(verseFor("shabbat")?.source).toBe("ישעיה נח, יג");
+  });
+});
+
+describe("holding a holy day from candle lighting to nightfall", () => {
+  const zAt = (day: string) => ({
+    candle: new Date(`${day}T15:00:00Z`), // 18:00 in Israel
+    tzeit: new Date(`${day}T16:10:00Z`), // 19:10
+  });
+  const on = (d: Date) => zAt(d.toISOString().slice(0, 10));
+
+  it("starts at candle lighting on Friday before Shabbat Sukkot, as the next day", async () => {
+    const { holyWindow, specialDaysOn } = await import("./specialDays");
+    expect(holyWindow(new Date("2026-09-25T14:30:00Z"), zAt("2026-09-25"), on)).toBeNull();
+    const w = holyWindow(new Date("2026-09-25T15:05:00Z"), zAt("2026-09-25"), on)!;
+    expect(w.date.toISOString().slice(0, 10)).toBe("2026-09-26");
+    expect(w.zmanim.tzeit?.toISOString()).toBe("2026-09-26T16:10:00.000Z");
+    expect(specialDaysOn(w.date).map((d) => d.key)).toContain("sukkot");
+  });
+
+  it("lasts all Shabbat and ends at nightfall", async () => {
+    const { holyWindow } = await import("./specialDays");
+    expect(holyWindow(new Date("2026-09-26T09:00:00Z"), zAt("2026-09-26"), on)?.date.toISOString().slice(0, 10)).toBe("2026-09-26");
+    expect(holyWindow(new Date("2026-09-26T16:20:00Z"), zAt("2026-09-26"), on)).toBeNull();
+  });
+
+  it("does not hold a weekday or chol hamoed", async () => {
+    const { holyWindow } = await import("./specialDays");
+    expect(holyWindow(new Date("2026-09-28T09:00:00Z"), zAt("2026-09-28"), on)).toBeNull();
+    // Candle lighting time passes on Monday too, but Tuesday is not holy.
+    expect(holyWindow(new Date("2026-09-28T15:30:00Z"), zAt("2026-09-28"), on)).toBeNull();
+  });
+
+  it("holds a festival that is not on Shabbat (Shmini Atzeret, from its eve)", async () => {
+    const { holyWindow } = await import("./specialDays");
+    expect(holyWindow(new Date("2026-10-02T15:30:00Z"), zAt("2026-10-02"), on)?.date.toISOString().slice(0, 10)).toBe("2026-10-03");
+  });
+});
+
+describe("when Shabbat and a festival end", () => {
+  it("is the later of nightfall and sunset plus the Shabbat-end minutes", async () => {
+    const { holyDayEnd } = await import("./specialDays");
+    const sunset = new Date("2026-09-26T15:32:00Z");
+    const tzeit = new Date("2026-09-26T15:52:00Z"); // sunset + 20
+    // The rule that was on the festival screen (nightfall, 18:52) loses to Shabbat's (sunset + 40, 19:12).
+    expect(holyDayEnd({ sunset, tzeit }, 40)).toEqual(new Date("2026-09-26T16:12:00Z"));
+    // And nightfall wins when it is the later one.
+    expect(holyDayEnd({ sunset, tzeit }, 10)).toEqual(tzeit);
+    expect(holyDayEnd({ tzeit })).toEqual(tzeit);
+  });
+});
+
+describe("automatic special days", () => {
+  it("shows a calendar day nobody set up, unless automatic days are off", async () => {
+    const { specialDayFor } = await import("./specialDays");
+    const sukkot = new Date("2026-09-26T09:00:00Z");
+    expect(specialDayFor([], { eventImages: {} }, sukkot)).toMatchObject({ def: { key: "sukkot" }, auto: true });
+    expect(specialDayFor([], { eventImages: {}, eventAuto: "info" }, sukkot)?.auto).toBe(true);
+    expect(specialDayFor([], { eventImages: {}, eventAuto: "off" }, sukkot)).toBeNull();
+  });
+
+  it("prefers a day the gabbai set up, and says so", async () => {
+    const { specialDayFor } = await import("./specialDays");
+    const sukkot = new Date("2026-09-26T09:00:00Z");
+    const r = specialDayFor([], { eventImages: { sukkot: ["https://x.example/a.jpg"] }, eventAuto: "off" }, sukkot);
+    expect(r).toMatchObject({ def: { key: "sukkot" }, auto: false });
+  });
+
+  it("leaves national days alone unless they are turned on", async () => {
+    const { specialDayFor, specialDaysOn } = await import("./specialDays");
+    const day = new Date("2027-05-12T09:00:00Z"); // יום העצמאות תשפ"ז
+    const national = specialDaysOn(day).find((d) => d.national);
+    expect(national).toBeTruthy();
+    expect(specialDayFor([], { eventImages: {} }, day)).toBeNull();
+    expect(specialDayFor([], { eventImages: {}, eventNationalAuto: true }, day)?.def.key).toBe(national!.key);
+  });
+});
+
+describe("the synagogue's Shabbat-end minutes", () => {
+  it("come from its settings, and fall back to 40", async () => {
+    const { holyEndMinutesFor } = await import("./specialDays");
+    expect(holyEndMinutesFor({ shabbat_end_minutes: 72 })).toBe(72);
+    expect(holyEndMinutesFor({ shabbat_end_minutes: null })).toBe(40);
+    expect(holyEndMinutesFor(null)).toBe(40);
+  });
+});
+
+describe("the day's own times, on the one engine", () => {
+  const find = (day: string, key: string) => specialZmanim(il(day), z(), 40).find((r) => r.key === key)?.time;
+
+  it("Erev Pesach: the end of eating and of burning chametz (4th and 5th hours)", () => {
+    expect(find("2027-04-21", "chametz_eat")?.getUTCHours()).toBe(7);
+    expect(find("2027-04-21", "chametz_burn")?.getUTCHours()).toBe(8);
+  });
+
+  it("Yom Kippur ends when Shabbat would, not at the weekday nightfall", () => {
+    // Sunset 15:00 + 40 is before tzeit 16:00 here, so tzeit; with 90 minutes, 16:30.
+    expect(find("2026-09-21", "fast_end")?.getUTCHours()).toBe(16);
+    const later = specialZmanim(il("2026-09-21"), z(), 90).find((r) => r.key === "fast_end")?.time;
+    expect(later?.getUTCMinutes()).toBe(30); // 15:00 + 90
+  });
+
+  it("Chanukah is not on the eve, and Purim Katan is a day of its own", () => {
+    expect(keys("2026-12-04")).not.toContain("chanukah");
+    expect(keys("2026-12-05")).toContain("chanukah");
+    expect(specialZmanim(il("2026-12-04"), z()).some((r) => r.key === "chanukah")).toBe(true); // the first candle, tonight
+    expect(nextDatesOf("purim_katan", il("2026-10-01"))[0]).toMatch(/^2027-02/);
+  });
+});

@@ -1,0 +1,17 @@
+{
+  "demo": "בדיקת New Shul — דמו 06.10",
+  "themes": 30,
+  "parts": 100,
+  "libraryGroups": 11,
+  "visibleLayers": 25,
+  "viewport": "1920x1080",
+  "verified": [
+    "both themes visible after reload",
+    "all four image parts visible in both saved displays",
+    "library has four named parts",
+    "add library set produces four copies: 25 to 29 layers",
+    "moving one part leaves other 28 unchanged",
+    "discard test copies by reload: returns to 25 layers",
+    "demo live content retained"
+  ]
+}

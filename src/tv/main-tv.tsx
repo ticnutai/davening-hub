@@ -1,0 +1,80 @@
+import { createRoot } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Capacitor } from "@capacitor/core";
+import { SplashScreen } from "@capacitor/splash-screen";
+import { TvApp } from "./TvApp";
+import { BoardCrashGuard } from "./BoardCrashGuard";
+import { applyHandoff, isRemoteBoard, remoteEnabled, startRemoteSwitch, watchForNewVersion } from "./remoteBoard";
+import "./tv-global.css";
+
+/**
+ * Entry point for the wall display build.
+ *
+ * Deliberately much smaller than `main.tsx`: no router, no auth, no Torah
+ * database, no service-worker update dance. The display renders one screen and
+ * is driven entirely by the realtime feed, so everything else is weight that
+ * would only add failure modes to an appliance nobody can reach.
+ */
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // The realtime subscription is what triggers refetches, so polling on a
+      // timer would only duplicate it. `useRealtimeSync` keeps a slow safety
+      // refetch for the case where an event is missed.
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+      // A TV has nobody to press retry. Keep trying, with backoff.
+      retry: Infinity,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30_000),
+    },
+  },
+});
+
+if (Capacitor.isNativePlatform()) {
+  SplashScreen.hide().catch(() => {});
+}
+
+// The board lives on the website and the APK carries a fallback copy
+// (remoteBoard.ts). On the website's copy, take the screen's identity from
+// the APK before anything reads it; on the APK's copy, move over to the
+// website once it answers.
+if (isRemoteBoard()) {
+  try {
+    if (applyHandoff(window.location.hash, localStorage)) {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+  } catch {
+    /* no storage: the board still runs, as a new unpaired screen */
+  }
+  watchForNewVersion();
+} else if (Capacitor.isNativePlatform() && remoteEnabled()) {
+  startRemoteSwitch();
+}
+
+// A display left on for weeks should never dim or sleep mid-shacharit. The
+// wake lock is re-acquired whenever the system drops it (a common effect of
+// the screen being turned off and on again at the TV).
+if ("wakeLock" in navigator) {
+  const requestWakeLock = async () => {
+    try {
+      await navigator.wakeLock.request("screen");
+    } catch {
+      // Denied or unsupported; the Android TV build also sets keepScreenOn.
+    }
+  };
+  void requestWakeLock();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void requestWakeLock();
+  });
+}
+
+createRoot(document.getElementById("root")!).render(
+  // Outside everything, including the provider: a board that throws while it
+  // is still coming up is exactly the case that used to leave the wall blank.
+  <BoardCrashGuard recover>
+    <QueryClientProvider client={queryClient}>
+      <TvApp />
+    </QueryClientProvider>
+  </BoardCrashGuard>,
+);

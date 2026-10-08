@@ -1,12 +1,3 @@
-<!-- LOVABLE:BEGIN -->
+# Davening Hub
 
-> [!IMPORTANT]
-> This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
-> published git history — force pushing, or rebasing/amending/squashing commits
-> that are already pushed — as it rewrites history on Lovable's side and the
-> user will likely lose their project history.
->
-> Commits you push to the connected branch sync back to Lovable and show up in
-> the editor, so keep the branch in a working state.
-
-<!-- LOVABLE:END -->
+This project contains the New Shul application and additions. The only authorized Supabase project is akmafwvxecexweqktgmw. Never connect to or mutate the original Shul Hub backend or repository. Preserve Git history. Do not execute historical migrations blindly. Test migrations against verified new-project history. No inherited APKs or release workflows may be published without a new build and verification.

@@ -1,0 +1,16 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.ticnutai.newshul'
+    compileSdk 36
+    buildFeatures { buildConfig true }
+    defaultConfig {
+        applicationId 'com.ticnutai.newshul'
+        minSdk 26
+        targetSdk 35
+        versionCode 4
+        versionName '0.1.3'
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    buildTypes { debug { applicationIdSuffix '' }; release { minifyEnabled false } }
+}
+// This independent shell uses Android's WebView only: no Google/Firebase/Play SDKs.

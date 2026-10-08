@@ -1,0 +1,355 @@
+import { useEffect, useMemo, useState } from "react";
+import { Check, Download, Upload, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  isSafeGradient,
+} from "@/tv/themes";
+
+/**
+ * Building and keeping gradients.
+ *
+ * Two colours, a direction and a live swatch cover what an admin actually
+ * wants; an "advanced" field keeps any gradient CSS that the simple controls
+ * cannot express (three stops, conic, transparency) exactly as written,
+ * instead of flattening it. Saving to the library stores the CSS itself, so
+ * deleting a saved gradient never changes a board that already uses it.
+ */
+
+
+const DEFAULT_ANGLE = 160;
+
+/** Reads a simple two-stop gradient back into the controls; null when it is beyond them. */
+function parseSimple(
+  value: string | null | undefined,
+): { kind: "linear" | "radial"; angle: number; from: string; to: string } | null {
+  if (!value) return null;
+  const linear = value.match(
+    /^linear-gradient\(\s*(\d{1,3})deg\s*,\s*(#[0-9a-f]{6})\s*(?:\d+%)?\s*,\s*(#[0-9a-f]{6})\s*(?:\d+%)?\s*\)$/i,
+  );
+  if (linear) return { kind: "linear", angle: Number(linear[1]), from: linear[2], to: linear[3] };
+  const radial = value.match(
+    /^radial-gradient\(\s*ellipse at 50% 30%\s*,\s*(#[0-9a-f]{6})\s*(?:\d+%)?\s*,\s*(#[0-9a-f]{6})\s*(?:\d+%)?\s*\)$/i,
+  );
+  if (radial) return { kind: "radial", angle: DEFAULT_ANGLE, from: radial[1], to: radial[2] };
+  return null;
+}
+
+function build(kind: "linear" | "radial", angle: number, from: string, to: string): string {
+  return kind === "linear"
+    ? `linear-gradient(${angle}deg, ${from}, ${to})`
+    : `radial-gradient(ellipse at 50% 30%, ${from}, ${to})`;
+}
+
+export function GradientStudio({
+  /** Where "החלה" puts the gradient: the board's background, or a chosen element. */
+  applyLabel,
+  onApply,
+  onPreview,
+  current,
+}: {
+  applyLabel: string;
+  onApply: (value: string | null) => void;
+  /**
+   * Shows what is being built on the board itself, without saving it.
+   * Must be stable, or the effect below fires on every render.
+   */
+  onPreview?: (value: string | null) => void;
+  current: string | null;
+}) {
+  const simple = useMemo(() => parseSimple(current), [current]);
+  const [kind, setKind] = useState<"linear" | "radial">(simple?.kind ?? "linear");
+  const [angle, setAngle] = useState(simple?.angle ?? DEFAULT_ANGLE);
+  const [from, setFrom] = useState(simple?.from ?? "#0b1628");
+  const [to, setTo] = useState(simple?.to ?? "#1b3054");
+  // Anything the two-colour controls cannot express is kept verbatim here.
+  const [advanced, setAdvanced] = useState(current && !simple ? current : "");
+
+  // Follow the board when the gradient changes elsewhere (a preset, an undo).
+  useEffect(() => {
+    const parsed = parseSimple(current);
+    if (parsed) {
+      setKind(parsed.kind);
+      setAngle(parsed.angle);
+      setFrom(parsed.from);
+      setTo(parsed.to);
+      setAdvanced("");
+    } else if (current) setAdvanced(current);
+  }, [current]);
+
+  const built = advanced.trim() ? advanced.trim() : build(kind, angle, from, to);
+  const valid = isSafeGradient(built);
+  // Every turn of a dial reaches the board. Nothing is written down: this
+  // is the board wearing it, so the judgement is made on the wall and not
+  // on a twenty-pixel strip in a side panel.
+  /**
+   * Only after the first deliberate change.
+   *
+   * The controls hold a default gradient before anybody touches them, and
+   * previewing that would paint the board the moment this tab is opened -
+   * an edit nobody asked for, on a board that was fine.
+   */
+  const [touched, setTouched] = useState(false);
+
+  const previewing = Boolean(onPreview) && touched && valid && built !== current;
+  useEffect(() => {
+    if (!touched) return;
+    onPreview?.(valid ? built : null);
+  }, [built, valid, touched, onPreview]);
+
+  // Leaving the control puts the board back to what is actually saved.
+  useEffect(() => () => onPreview?.(null), [onPreview]);
+
+  return (
+    <div className="space-y-3">
+      {/* the gradient being built, big enough to judge */}
+      <div className="space-y-2">
+        <div
+          className="h-20 rounded-lg border shadow-inner"
+          style={{ backgroundImage: valid ? built : undefined }}
+        />
+        {previewing && (
+          <p className="text-[11px] leading-tight text-muted-foreground">
+            כך זה נראה על הלוח עכשיו. עוד לא נשמר - ״{applyLabel}״ מקבע, ויציאה מכאן מחזירה את
+            הקודם.
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" size="sm" onClick={() => onApply(built)} disabled={!valid}>
+            <Check className="size-4" /> {applyLabel}
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {valid ? "" : "הערך אינו גרדיאנט תקין"}
+          </span>
+        </div>
+      </div>
+
+      {/* the two-colour controls */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+        <div className="flex items-center gap-1">
+          {(
+            [
+              ["linear", "ישר"],
+              ["radial", "מעגלי"],
+            ] as const
+          ).map(([k, label]) => (
+            <Button
+              key={k}
+              type="button"
+              size="sm"
+              variant={kind === k ? "default" : "outline"}
+              aria-pressed={kind === k}
+              onClick={() => {
+                setTouched(true);
+                setKind(k);
+                setAdvanced("");
+              }}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        <label className="flex items-center gap-2">
+          מ־
+          <input
+            type="color"
+            aria-label="צבע ראשון"
+            value={from}
+            onChange={(e) => {
+              setTouched(true);
+              setFrom(e.target.value);
+              setAdvanced("");
+            }}
+            className="size-8 cursor-pointer rounded border bg-transparent p-0.5"
+          />
+        </label>
+        <label className="flex items-center gap-2">
+          אל
+          <input
+            type="color"
+            aria-label="צבע שני"
+            value={to}
+            onChange={(e) => {
+              setTouched(true);
+              setTo(e.target.value);
+              setAdvanced("");
+            }}
+            className="size-8 cursor-pointer rounded border bg-transparent p-0.5"
+          />
+        </label>
+        {kind === "linear" && (
+          <label className="flex items-center gap-2">
+            כיוון
+            <input
+              type="range"
+              min={0}
+              max={360}
+              step={5}
+              value={angle}
+              aria-label="זווית הגרדיאנט"
+              onChange={(e) => {
+                setTouched(true);
+                setAngle(Number(e.target.value));
+                setAdvanced("");
+              }}
+              className="w-28 accent-primary"
+            />
+            <span className="w-10 text-xs tabular-nums">{angle}°</span>
+          </label>
+        )}
+      </div>
+
+      {/* raw CSS, for anything the controls above cannot express */}
+      <details className="rounded-md border bg-muted/40 p-2">
+        <summary className="cursor-pointer text-xs font-medium">
+          CSS מתקדם (שלוש שכבות, שקיפות, conic…)
+        </summary>
+        <Input
+          dir="ltr"
+          value={advanced}
+          onChange={(e) => {
+            setTouched(true);
+            setAdvanced(e.target.value);
+          }}
+          placeholder="linear-gradient(160deg, #0b1628 0%, #1b3054 55%, #16304f 100%)"
+          className={`mt-2 h-8 font-mono text-xs ${
+            advanced && !isSafeGradient(advanced) ? "border-destructive" : ""
+          }`}
+          aria-label="גרדיאנט CSS"
+        />
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          מה שנכתב כאן נשמר בדיוק כפי שהוא. שינוי של אחד הבקרים שלמעלה מחליף אותו בגרדיאנט פשוט.
+        </p>
+      </details>
+    </div>
+  );
+}
+
+/* ------------------------------------------------ import / export UI -- */
+
+export function TransferPanel({
+  onExport,
+  onImport,
+}: {
+  onExport: (what: "themes" | "gradients" | "all", how: "file" | "clipboard") => void;
+  onImport: (text: string) => void;
+}) {
+  const [text, setText] = useState("");
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <div className="text-xs font-medium text-muted-foreground">
+          פורמט העיצוב המקורי — העברה חלקית למערכת תואמת
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              ["all", "צבעים ומבנה בסיסי (JSON)"],
+              ["themes", "צבעי בסיס"],
+              ["gradients", "גרדיאנטים"],
+            ] as const
+          ).map(([what, label]) => (
+            <Button
+              key={what}
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onExport(what, "file")}
+            >
+              <Download className="size-4" /> {label}
+            </Button>
+          ))}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => onExport("all", "clipboard")}
+          >
+            העתקה (להדבקה במקום אחר)
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-sm text-amber-800 dark:text-amber-200" role="note">הפורמט המקורי אינו מעביר שכבות אלמנטים, טקסטים חופשיים או את העיצובים האמנותיים החדשים. לשמירתם השתמשו בחבילת ZIP של New Shul. אתר אחר צריך תמיכה במנגנון השכבות כדי להציגם ולערוך אותם.</p>
+        <div className="text-xs font-medium text-muted-foreground">ייבוא</div>
+        <p className="text-xs text-muted-foreground">
+          קובץ מעורך לוחות הברית מביא גם את מבנה הלוח: קשת או פינות, רקע, מרווחים, גודל טקסט ושם
+          בית הכנסת. הכל נכנס לטיוטה עד "שמור ושדר".
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" size="sm" variant="outline" asChild>
+            <label className="cursor-pointer">
+              <Upload className="size-4" /> בחירת קובץ
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="sr-only"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file) onImport(await file.text());
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setOpen((v) => !v)}>
+            {open ? <X className="size-4" /> : null} {open ? "סגירה" : "או הדבקת טקסט"}
+          </Button>
+        </div>
+        {open && (
+          <div className="space-y-2">
+            <textarea
+              dir="ltr"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={4}
+              aria-label="תוכן הקובץ לייבוא"
+              placeholder='{"kind":"shul-hub-tv-design", …}'
+              className="w-full rounded-md border bg-background p-2 font-mono text-xs"
+            />
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button type="button" size="sm" disabled={!text.trim()}>
+                  ייבוא
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent dir="rtl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>לייבא מהקובץ?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    צבעי הבסיס והגרדיאנטים יתווספו למה שקיים, בלי למחוק כלום. שם שכבר תפוס יקבל מספר.
+                    הכל נשאר טיוטה עד "שמור ושדר".
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>ביטול</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      onImport(text);
+                      setText("");
+                    }}
+                  >
+                    ייבוא
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -7,3 +7,4 @@ export function assertApprovedSupabase(raw: string | undefined): asserts raw is 
   throw new Error('Refusing connection outside the approved new Supabase project');
  }
 }
+export const assertShulHubSupabase: typeof assertApprovedSupabase = assertApprovedSupabase;

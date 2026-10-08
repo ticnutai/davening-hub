@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1628" />
+    <!-- Tells the APK this page is the board (src/tv/remoteBoard.ts). -->
+    <meta name="shul-tv-board" content="1" />
+    <meta name="robots" content="noindex" />
+    <title>בית כנסת בסר 3 — לוח תצוגה</title>
+    <!--
+      No favicon. Without this line the WebView requests /favicon.ico on its
+      own, and on the device Capacitor's local server answered 404 for it even
+      though the file is packaged. A board has no browser tab, so an empty icon
+      removes the request and the console error along with it.
+    -->
+    <link rel="icon" href="data:," />
+
+    <!--
+      Fonts are bundled (public-tv/fonts, from scripts/fetch-tv-fonts.mjs), not
+      loaded from Google: the TV often boots after a power cut before the
+      router is back, and must come up in the right typeface anyway.
+    -->
+    <link rel="stylesheet" href="./fonts/fonts.css" />
+
+    <style>
+      /* Painted before the bundle parses so a cold boot on the wall never
+         flashes white in a dark room. */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0b1628;
+      }
+    </style>
+    <style>#lovable-badge{display:none!important}</style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/tv/main-tv.tsx"></script>
+  </body>
+</html>

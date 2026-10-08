@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { VisualColorPicker } from "@/components/VisualColorPicker";
-import { useTheme } from "@/lib/theme";
+import { useTheme } from "@/contexts/ThemeContext";
 
 type Scope = "element" | "component" | "global";
 type Override = {
