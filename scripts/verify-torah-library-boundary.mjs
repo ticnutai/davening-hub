@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const allowedSupabaseHost = "bfiayuuhjtyccqobsjvl.supabase.co";
+const allowedSupabaseHost = "akmafwvxecexweqktgmw.supabase.co";
 const forbiddenSupabaseHost = "mocukhvfqqzkekphifsr.supabase.co";
 const featureRoot = path.join(root, "src", "features", "torah-library");
 const manifestPath = path.join(root, "public", "torah-data", "content-manifest.json");

@@ -7,7 +7,7 @@
 
 | מערכת                              | כתובת Supabase                             | טביעת מפתח ציבורי SHA-256 | משתני מנהל מקומיים                                  |
 | ---------------------------------- | ------------------------------------------ | ------------------------- | --------------------------------------------------- |
-| Shul Hub — המערכת היחידה המותרת    | `https://bfiayuuhjtyccqobsjvl.supabase.co` | `69B63A914EF0`            | `ADMIN_EMAIL`, `ADMIN_PASSWORD`                     |
+| Shul Hub — המערכת היחידה המותרת    | `https://akmafwvxecexweqktgmw.supabase.co` | `69B63A914EF0`            | `ADMIN_EMAIL`, `ADMIN_PASSWORD`                     |
 | pash — מקור תוכן בלבד, אסור לחיבור | `https://mocukhvfqqzkekphifsr.supabase.co` | `0CCA58311100`            | `MIGRATION_ADMIN_EMAIL`, `MIGRATION_ADMIN_PASSWORD` |
 
 שמות משתמש וסיסמאות אינם נשמרים במסמך, בקוד, ב־manifest או ב־Git. הם נשארים רק בקובצי

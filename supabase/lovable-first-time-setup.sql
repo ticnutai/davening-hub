@@ -1,5 +1,5 @@
 -- First-time Lovable / Supabase setup for shul-hub
--- Target project_id: bfiayuuhjtyccqobsjvl
+-- Target project_id: akmafwvxecexweqktgmw
 -- Safe to rerun on a new or partially initialized project.
 -- Existing application rows are preserved; initial content is inserted only into empty tables.
 -- Ordered sources:

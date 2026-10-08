@@ -41,7 +41,7 @@ test.describe("read-only Torah library", () => {
     expect(supabaseRequests).not.toContainEqual(
       expect.stringContaining("mocukhvfqqzkekphifsr.supabase.co"),
     );
-    expect(supabaseRequests.every((url) => url.includes("bfiayuuhjtyccqobsjvl.supabase.co"))).toBe(
+    expect(supabaseRequests.every((url) => url.includes("akmafwvxecexweqktgmw.supabase.co"))).toBe(
       true,
     );
   });
