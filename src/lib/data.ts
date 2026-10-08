@@ -34,10 +34,10 @@ export function minyanSubcategories(category?: MinyanCategory | null): MinyanSub
       item !== null &&
       "id" in item &&
       "label" in item &&
-      typeof item.id === "string" &&
-      typeof item.label === "string" &&
-      item.id.trim().length > 0 &&
-      item.label.trim().length > 0,
+      typeof item["id"] === "string" &&
+      typeof item["label"] === "string" &&
+      item["id"].trim().length > 0 &&
+      item["label"].trim().length > 0,
   );
 }
 

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 import { getRememberAuth, setRememberAuth } from "@/lib/auth-storage";
 
 export const Route = createFileRoute("/auth")({
@@ -302,6 +303,26 @@ function AuthPage() {
             >
               {mode === "signin" ? "אין עדיין חשבון? הרשמה" : "כבר יש חשבון? כניסה"}
             </button>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="h-px flex-1 bg-border" />
+              או
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={busy}
+              onClick={async () => {
+                const result = await lovable.auth.signInWithOAuth("google", {
+                  redirect_uri: window.location.origin,
+                });
+                if (result.error) toast.error("הכניסה עם Google נכשלה");
+                else if (!result.redirected) await goHome();
+              }}
+            >
+              המשך עם Google
+            </Button>
           </form>
         )}
       </main>

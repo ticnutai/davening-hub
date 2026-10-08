@@ -138,7 +138,7 @@ export function VisualColorPicker({
 
   useEffect(
     () => () => {
-      delete document.documentElement.dataset.colorSampling;
+      delete document.documentElement.dataset["colorSampling"];
       if (sampleHandler.current) document.removeEventListener("click", sampleHandler.current, true);
     },
     [],
@@ -158,7 +158,7 @@ export function VisualColorPicker({
 
   const stopSampling = () => {
     setSampling(false);
-    delete document.documentElement.dataset.colorSampling;
+    delete document.documentElement.dataset["colorSampling"];
     if (sampleHandler.current) {
       document.removeEventListener("click", sampleHandler.current, true);
       sampleHandler.current = null;
@@ -168,7 +168,7 @@ export function VisualColorPicker({
   const sampleFromPage = () => {
     setOpen(false);
     setSampling(true);
-    document.documentElement.dataset.colorSampling = "true";
+    document.documentElement.dataset["colorSampling"] = "true";
     setPickerMessage("גלול בחופשיות וגע ברכיב שממנו תרצה לדגום צבע.");
 
     const sample = (event: MouseEvent) => {
