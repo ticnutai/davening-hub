@@ -63,6 +63,7 @@ export function SynagogueDetailsDialog({
   /** Files uploaded in this window and not saved yet: removed if it is closed without saving. */
   const pending = useRef<string[]>([]);
   const close = () => {
+    if (saving || uploading) return;
     if (!LOCAL_STUDIO && pending.current.length) void supabase.storage.from("community-media").remove(pending.current);
     pending.current = [];
     onClose();
@@ -173,10 +174,13 @@ export function SynagogueDetailsDialog({
         .eq("id", row.data.id)
         .eq("community_id", id);
       if (error) throw error;
+      // These files are already referenced by the committed settings row.
+      // A later rename failure must never make Cancel delete them.
+      pending.current = pending.current.filter(path => !logos.some(logo => logo.path === path));
       const name = (form.name ?? "").trim();
       if (canRename && renamed && name && name !== community?.name) {
         const { error: renameError } = await supabase.from("communities").update({ name }).eq("id", id);
-        if (renameError) throw renameError;
+        if (renameError) throw new Error("פרטי בית הכנסת והלוגואים נשמרו, אך עדכון השם ברשימת בתי הכנסת נכשל. אפשר לנסות לשמור שוב. " + renameError.message);
       }
       // Files of logos that were removed go too, once the row no longer points at them.
       const gone = saved.filter((l) => !kept.has(l.id)).map((l) => l.path);

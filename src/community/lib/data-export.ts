@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { communityId } from "./community";
 import { supabase } from "@community/integrations/supabase/client";
 import type { Tables } from "@community/integrations/supabase/types";
 import { downloadFile } from '@/tv/workspaceTransfer';
@@ -57,8 +58,9 @@ export interface ExportBundle {
 /** Fetches every row from every exportable table using the authenticated admin client. */
 export async function fetchAllData(): Promise<ExportData> {
   const result: ExportData = {};
+  const scope = communityId();
   for (const table of EXPORTABLE_TABLES) {
-    const { data, error } = await supabase.from(table).select("*");
+    const { data, error } = await supabase.from(table).select("*").eq("community_id", scope);
     if (error) throw new Error(`שגיאה בשליפת ${tableLabel(table)}: ${error.message}`);
     result[table] = (data ?? []) as ExportRow[];
   }
@@ -209,6 +211,20 @@ export async function importData(
   tables: ExportableTable[],
 ): Promise<ImportTableResult[]> {
   const selected = new Set(tables);
+  const scope = communityId();
+  // Validate the entire selection before writing any table. Cross-community
+  // transfer needs explicit ID remapping; a backup restore must never do it silently.
+  for (const table of EXPORTABLE_TABLES) {
+    if (!selected.has(table)) continue;
+    const rows = (data[table] ?? []).filter(row => row.id != null && row.id !== "");
+    if (rows.some(row => row.community_id !== scope)) {
+      throw new Error("הקובץ כולל רשומות מבית כנסת אחר או ללא שיוך. הייבוא לא התחיל. יש לבחור גיבוי של בית הכנסת הנוכחי; העברה בין בתי כנסת דורשת מיפוי מזהים.");
+    }
+    if (!rows.length) continue;
+    const { data: existing, error } = await supabase.from(table).select("id,community_id").in("id", rows.map(row => String(row.id)));
+    if (error) throw new Error(error.message);
+    if (existing?.some(row => row.community_id !== scope)) throw new Error("מזהה בקובץ שייך לבית כנסת אחר. הייבוא לא התחיל.");
+  }
   const results: ImportTableResult[] = [];
 
   for (const table of EXPORTABLE_TABLES) {
@@ -218,6 +234,7 @@ export async function importData(
       results.push({ table, attempted: 0, imported: 0 });
       continue;
     }
+    if (communityId() !== scope) throw new Error("בית הכנסת השתנה בזמן הייבוא. הפעולה נעצרה; בדקו את התוצאות לפני ניסיון נוסף.");
     const { error } = await supabase.from(table).upsert(rows as never, { onConflict: "id" });
     results.push({
       table,

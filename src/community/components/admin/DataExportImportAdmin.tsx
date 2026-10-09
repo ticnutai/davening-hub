@@ -117,12 +117,12 @@ export function DataExportImportAdmin() {
 
       <div className="card-elev space-y-4 p-6">
         <div>
-          <h2 className="font-semibold">ייבוא נתונים</h2>
+          <h2 className="font-semibold">שחזור נתוני בית הכנסת הנבחר</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             העלאת קובץ Excel או JSON שיוצא מהאתר (או שנערך לפי אותו מבנה). רשומות עם{" "}
             <code className="rounded bg-muted px-1">id</code> קיים יעודכנו; רשומות חדשות ללא{" "}
             <code className="rounded bg-muted px-1">id</code> ידלגו. אין מחיקה או יצירה של רשומות
-            חדשות ללא מזהה. רשומה עם מזהה חדש יכולה להתווסף. מעבר לאתר אחר מחייב התאמת מזהי הקהילה, הקטגוריות והרשאות הגישה.
+            חדשות ללא מזהה. רשומה עם מזהה חדש יכולה להתווסף. קבצים מבית כנסת אחר או ללא שיוך יידחו לפני כתיבה. העברה לאתר אחר דורשת מיפוי מזהי קהילה וקטגוריות; היא אינה שחזור רגיל.
           </p>
         </div>
         <div>
@@ -143,7 +143,7 @@ export function DataExportImportAdmin() {
         </div>
       </div>
 
-      <Dialog open={preview !== null} onOpenChange={(open) => !open && setPreview(null)}>
+      <Dialog open={preview !== null} onOpenChange={(open) => !open && !importing && setPreview(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>אישור ייבוא נתונים</DialogTitle>
@@ -164,7 +164,7 @@ export function DataExportImportAdmin() {
                   <span className="flex items-center gap-2">
                     <Checkbox
                       checked={selectedTables.has(table)}
-                      disabled={count === 0}
+                      disabled={importing || count === 0}
                       onCheckedChange={(checked) =>
                         setSelectedTables((prev) => {
                           const next = new Set(prev);
@@ -196,7 +196,7 @@ export function DataExportImportAdmin() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPreview(null)}>
+            <Button variant="outline" disabled={importing} onClick={() => setPreview(null)}>
               ביטול
             </Button>
             <Button onClick={confirmImport} disabled={importing || selectedTables.size === 0}>
