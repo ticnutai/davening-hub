@@ -1333,7 +1333,7 @@ function TvDesignPanelContent({ studio = false }: { studio?: boolean } = {}) {
       {guide && <BuildGuide done={guide} onStep={goToStep} onClose={() => setGuide(null)} />}
 
       <Tabs value={tab} onValueChange={setTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList data-editor-main-tabs className="grid w-full grid-cols-5">
           <TabsTrigger value="design">עיצוב</TabsTrigger>
           <TabsTrigger value="layout">פריסה</TabsTrigger>
           <TabsTrigger value="content">תוכן</TabsTrigger>
@@ -1958,7 +1958,7 @@ function TvDesignPanelContent({ studio = false }: { studio?: boolean } = {}) {
           <div data-testid="board-transfer-section" className="scroll-mt-24 rounded-xl border p-4 space-y-4">
             <h2 tabIndex={-1} className="font-semibold">ייבוא וייצוא</h2>
             <WorkspaceTransfer config={draft} onImport={(config) => dispatch({ type: "edit", key: "workspace-import", update: () => config })} />
-            <TransferPanel onExport={doExport} onImport={doImport} />
+            <details className="rounded border p-3"><summary className="cursor-pointer font-medium">מתקדם: צבעים ומבנה בסיסי בפורמט JSON הישן</summary><p className="my-2 text-sm text-muted-foreground">להעברת ערכה עם חלקים ותמונות השתמשו בחבילת ZIP למעלה. כאן נשמרת התאימות לקובצי הצבעים הקודמים.</p><TransferPanel onExport={doExport} onImport={doImport} /></details>
             {LOCAL_STUDIO && <details data-testid="site-data-transfer" className="rounded border p-3">
               <summary className="cursor-pointer font-medium">הגדרות ונתוני האתר — המנגנון המקורי</summary>
               <p className="my-3 text-sm">ב־New Shul פעולות אלה משנות רק את הנתונים המקומיים במכשיר הזה. אישור הייבוא שומר את הנתונים מיד, בנפרד משמירת טיוטת העיצוב.</p>

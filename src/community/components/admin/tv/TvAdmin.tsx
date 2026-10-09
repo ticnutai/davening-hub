@@ -19,7 +19,8 @@ export default function TvAdmin() {
   // it is for. "מסכים מחוברים" is about the boxes on the walls - a different
   // question, asked far less often, and one that has its own alert above.
   // "מועדים ואירועים" was a tab of its own; it is the board editor's "מועדים" now.
-  const tab = params.get("tvTab") === "events" ? "design" : params.get("tvTab") ?? "design";
+  const requested = params.get("tvTab");
+  const tab = requested === "devices" ? "screens" : requested === "screens" || requested === "logs" ? requested : "design";
   const devices = useTvDevices();
   const now = useNow(15_000).getTime();
   const offline = (devices.data ?? []).filter((d) => d.approved && !deviceHealth(d, now).online);

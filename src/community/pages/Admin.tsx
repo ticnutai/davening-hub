@@ -1,10 +1,11 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense } from "react";
-import { Building2, LayoutDashboard, LogOut, ShieldAlert, Tv } from "lucide-react";
+import { Building2, LogOut, ShieldAlert } from "lucide-react";
 import { CommunityHeader } from "@community/components/CommunityChrome";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { AdminNavigation } from "@community/components/admin/AdminNavigation";
 import { MinyanimAdmin } from "@community/components/admin/MinyanimAdmin";
 import { MinyanOverridesAdmin } from "@community/components/admin/MinyanOverridesAdmin";
 import { AnnouncementsAdmin, ChavrutotAdmin, ShiurimAdmin } from "@community/components/admin/ContentAdmin";
@@ -137,35 +138,7 @@ export function AdminPage() {
             className="mt-5 min-w-0 text-right sm:mt-6"
             data-focus-tight
           >
-            <TabsList
-              dir="rtl"
-              aria-label="מדורי ניהול"
-              data-focus-hide
-              className="admin-tabs-scroll flex h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto px-1 py-1.5 text-right [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0 [&>button]:whitespace-nowrap sm:flex-wrap sm:overflow-visible"
-            >
-              <TabsTrigger value="ai">✨ עוזר חכם</TabsTrigger>
-              <TabsTrigger value="api">🔑 מפתח API</TabsTrigger>
-              <TabsTrigger value="minyanim">מניינים</TabsTrigger>
-              <TabsTrigger value="announcements">מודעות</TabsTrigger>
-              <TabsTrigger value="shiurim">שיעורים</TabsTrigger>
-              <TabsTrigger value="chavrutot">חברותות</TabsTrigger>
-              <TabsTrigger value="chavruta-requests">בקשות חברותא</TabsTrigger>
-              <TabsTrigger value="messages">הודעות{unread > 0 ? ` (${unread})` : ""}</TabsTrigger>
-              <TabsTrigger value="widgets">
-                <LayoutDashboard className="size-4" /> תצוגת דף הבית
-              </TabsTrigger>
-              <TabsTrigger value="users">משתמשים</TabsTrigger>
-              <TabsTrigger value="data">ייצוא/ייבוא</TabsTrigger>
-              <TabsTrigger value="qr">קודי QR</TabsTrigger>
-              {!storeApp && (
-                <>
-                  <TabsTrigger value="apps">הורדת אפליקציות</TabsTrigger>
-                  <TabsTrigger value="tv">
-                    <Tv className="size-4" /> תצוגות
-                  </TabsTrigger>
-                </>
-              )}
-            </TabsList>
+            <AdminNavigation storeApp={storeApp} unread={unread} />
 
             <TabsContent value="communities" className="mt-6">
               <CommunitiesAdmin />
