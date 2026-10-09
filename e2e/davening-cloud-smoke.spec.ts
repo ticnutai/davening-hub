@@ -25,3 +25,21 @@ test('new cloud community loads and guest can open login', async ({ page }) => {
   expect(failedApi).toEqual([]);
   expect(errors).toEqual([]);
 });
+
+test('public community pages keep distinct readable entry points', async ({ page }) => {
+  test.skip(!process.env.E2E_BASE_URL?.includes('davening-hub.lovable.app'), 'Explicit new deployment only');
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  for (const [url, heading] of [
+    ['/community/announcements', 'מודעות לציבור'],
+    ['/community/shiurim', 'שיעורי תורה'],
+    ['/community/chavrutot', 'חברותות'],
+    ['/community/contact', 'הודעה לגבאי'],
+  ]) {
+    await page.goto(url);
+    await expect(page.getByRole('heading', { level: 1, name: heading, exact: true })).toBeVisible({ timeout: 30000 });
+  }
+  await expect(page.getByLabel('תוכן ההודעה')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'שליחת הודעה', exact: true })).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
