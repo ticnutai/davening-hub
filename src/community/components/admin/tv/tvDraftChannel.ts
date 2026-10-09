@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useCommunityId } from "@/community/lib/community";
 import type { TvConfig } from "@/tv/config";
 
 /**
@@ -16,11 +17,11 @@ import type { TvConfig } from "@/tv/config";
  */
 export const TV_DRAFT_CHANNEL = "shul-tv-draft";
 
-export type DraftMessage =
+export type DraftMessage = { communityId: string } & (
   | { type: "hello" }
   | { type: "draft"; config: TvConfig; editedAt: number }
   /** A window saved: the others refresh their "saved" copy. */
-  | { type: "saved" };
+  | { type: "saved" });
 
 export function useDraftSync(
   draft: TvConfig,
@@ -30,6 +31,8 @@ export function useDraftSync(
     onSaved?: () => void;
   } = {},
 ) {
+  const communityId = useCommunityId();
+  const mountedCommunity = useRef(communityId);
   const latest = useRef({ draft, editedAt });
   latest.current = { draft, editedAt };
   const handlersRef = useRef(handlers);
@@ -37,14 +40,15 @@ export function useDraftSync(
   const channelRef = useRef<BroadcastChannel | null>(null);
 
   useEffect(() => {
-    if (typeof BroadcastChannel === "undefined") return;
-    const channel = new BroadcastChannel(TV_DRAFT_CHANNEL);
+    if (typeof BroadcastChannel === "undefined" || mountedCommunity.current !== communityId) return;
+    const channel = new BroadcastChannel(`${TV_DRAFT_CHANNEL}:${communityId}:tv_config`);
     channelRef.current = channel;
     channel.onmessage = (e: MessageEvent<DraftMessage>) => {
       const msg = e.data;
+      if (msg?.communityId !== communityId) return;
       if (msg?.type === "hello") {
         channel.postMessage({
-          type: "draft",
+          type: "draft", communityId,
           config: latest.current.draft,
           editedAt: latest.current.editedAt,
         } satisfies DraftMessage);
@@ -55,22 +59,22 @@ export function useDraftSync(
         handlersRef.current.onSaved?.();
       }
     };
-    channel.postMessage({ type: "hello" } satisfies DraftMessage);
+    channel.postMessage({ type: "hello", communityId } satisfies DraftMessage);
     return () => {
       channel.close();
       channelRef.current = null;
     };
-  }, []);
+  }, [communityId]);
 
   useEffect(() => {
     channelRef.current?.postMessage({
-      type: "draft",
+      type: "draft", communityId,
       config: draft,
       editedAt,
     } satisfies DraftMessage);
-  }, [draft, editedAt]);
+  }, [draft, editedAt, communityId]);
 
   return {
-    announceSaved: () => channelRef.current?.postMessage({ type: "saved" } satisfies DraftMessage),
+    announceSaved: () => channelRef.current?.postMessage({ type: "saved", communityId } satisfies DraftMessage),
   };
 }

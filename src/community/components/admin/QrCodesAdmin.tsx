@@ -1,20 +1,22 @@
 import { useRef } from "react";
-import { Copy, Download, Globe2, Smartphone } from "lucide-react";
+import { Copy, Download, Globe2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useCommunity } from "@/community/lib/community";
 
-const QR_TARGETS = [
-  {
-    id: "website",
-    title: "אתר בית הכנסת",
-    url: window.location.origin,
-    Icon: Globe2,
-  },
+export function communityQrUrl(slug: string, href = window.location.href): string {
+  const current = new URL(href);
+  const localEntry = current.pathname.endsWith("/new-shul.html");
+  const url = new URL(localEntry ? current.pathname : "/community", current.origin);
+  url.searchParams.set("shul", slug);
+  if (localEntry) url.hash = "/community";
+  return url.toString();
+}
 
-] as const;
+type QrTarget = { id: string; title: string; url: string; Icon: typeof Globe2 };
 
-function QrCard({ target }: { target: (typeof QR_TARGETS)[number] }) {
+function QrCard({ target }: { target: QrTarget }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   function downloadSvg() {
@@ -31,8 +33,12 @@ function QrCard({ target }: { target: (typeof QR_TARGETS)[number] }) {
   }
 
   async function copyUrl() {
-    await navigator.clipboard.writeText(target.url);
-    toast.success("הכתובת הועתקה");
+    try {
+      await navigator.clipboard.writeText(target.url);
+      toast.success("הכתובת הועתקה");
+    } catch {
+      toast.error("לא ניתן להעתיק כרגע. אפשר להעתיק את הכתובת המוצגת כאן ידנית.");
+    }
   }
 
   return (
@@ -63,18 +69,23 @@ function QrCard({ target }: { target: (typeof QR_TARGETS)[number] }) {
 }
 
 export function QrCodesAdmin() {
+  const community = useCommunity();
+  const target: QrTarget | null = community ? {
+    id: "website",
+    title: `אתר בית הכנסת — ${community.name}`,
+    url: communityQrUrl(community.slug),
+    Icon: Globe2,
+  } : null;
   return (
     <section dir="rtl" className="space-y-4 text-right">
       <div>
         <h2 className="text-2xl font-semibold">קודי QR</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          סריקה מהטלפון תפתח ישירות את האתר או את דף האפליקציה ב־Google Play.
+          סריקה מהטלפון תפתח את אתר בית הכנסת שנבחר כאן.
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        {QR_TARGETS.map((target) => (
-          <QrCard key={target.id} target={target} />
-        ))}
+        {target ? <QrCard target={target} /> : <p>יש לבחור בית כנסת לפני יצירת קוד QR.</p>}
       </div>
     </section>
   );

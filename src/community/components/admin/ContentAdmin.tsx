@@ -184,6 +184,10 @@ export function AnnouncementsAdmin() {
   const [savingOrder, setSavingOrder] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [originalImagePath, setOriginalImagePath] = useState<string | null>(null);
+  // Refs also guard the interval before React paints the pending state.
+  const imageOperationRef = useRef(false);
+  const savingDraftRef = useRef(false);
+  const draftBusy = uploadingImage || save.isPending;
   const orderedRef = useRef<Announcement[]>([]);
   const draggedIndexRef = useRef<number | null>(null);
 
@@ -266,11 +270,13 @@ export function AnnouncementsAdmin() {
   }
 
   function editAnnouncement(announcement: Announcement) {
+    if (imageOperationRef.current || savingDraftRef.current) return;
     setOriginalImagePath(announcement.image_path);
     setDraft(announcement);
   }
 
   function createAnnouncement() {
+    if (imageOperationRef.current || savingDraftRef.current) return;
     setOriginalImagePath(null);
     setDraft({
       kind: "mazal_tov",
@@ -288,15 +294,23 @@ export function AnnouncementsAdmin() {
   }
 
   async function discardDraft() {
+    if (imageOperationRef.current || savingDraftRef.current) return;
+    imageOperationRef.current = true;
+    setUploadingImage(true);
+    try {
     if (draft?.image_path && draft.image_path !== originalImagePath) {
       await supabase.storage.from("community-media").remove([draft.image_path]);
     }
     setDraft(null);
     setOriginalImagePath(null);
+    } finally {
+      imageOperationRef.current = false;
+      setUploadingImage(false);
+    }
   }
 
   async function uploadAnnouncementImage(file: File) {
-    if (!draft) return;
+    if (!draft || imageOperationRef.current || savingDraftRef.current) return;
     if (!file.type.startsWith("image/")) {
       toast.error("אפשר להעלות קובץ תמונה בלבד");
       return;
@@ -305,11 +319,13 @@ export function AnnouncementsAdmin() {
       toast.error("התמונה גדולה מדי. הגודל המרבי הוא 5MB");
       return;
     }
+    imageOperationRef.current = true;
     setUploadingImage(true);
+    try {
     if(LOCAL_STUDIO){
-      try { setDraft({...draft,image_path:null,image_url:await localImage(file)});toast.success('התמונה מוכנה. לחצו שמירה כדי לשמור אותה מקומית'); }
-      catch { toast.error('קריאת התמונה נכשלה'); }
-      finally { setUploadingImage(false); }
+      const imageUrl = await localImage(file);
+      setDraft(current => current ? {...current,image_path:null,image_url:imageUrl} : current);
+      toast.success('התמונה מוכנה. לחצו שמירה כדי לשמור אותה מקומית');
       return;
     }
     const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
@@ -326,20 +342,33 @@ export function AnnouncementsAdmin() {
       await supabase.storage.from("community-media").remove([draft.image_path]);
     }
     const { data: publicImage } = supabase.storage.from("community-media").getPublicUrl(path);
-    setDraft({ ...draft, image_path: path, image_url: publicImage.publicUrl });
-    setUploadingImage(false);
+    setDraft(current => current ? { ...current, image_path: path, image_url: publicImage.publicUrl } : current);
     toast.success("התמונה הועלתה. לחצו שמירה כדי לפרסם אותה");
+    } catch {
+      toast.error("העלאת התמונה נכשלה");
+    } finally {
+      imageOperationRef.current = false;
+      setUploadingImage(false);
+    }
   }
 
   async function removeDraftImage() {
-    if (!draft) return;
+    if (!draft || imageOperationRef.current || savingDraftRef.current) return;
+    imageOperationRef.current = true;
+    setUploadingImage(true);
+    try {
     if (draft.image_path && draft.image_path !== originalImagePath) {
       await supabase.storage.from("community-media").remove([draft.image_path]);
     }
-    setDraft({ ...draft, image_url: null, image_path: null });
+    setDraft(current => current ? { ...current, image_url: null, image_path: null } : current);
+    } finally {
+      imageOperationRef.current = false;
+      setUploadingImage(false);
+    }
   }
 
   function deleteAnnouncement(announcement: Announcement) {
+    if (imageOperationRef.current || savingDraftRef.current) return;
     remove.mutate(announcement.id, {
       onSuccess: () => {
         if (announcement.image_path) {
@@ -354,6 +383,7 @@ export function AnnouncementsAdmin() {
       <div className="flex justify-end">
         <Button
           onClick={createAnnouncement}
+          disabled={draftBusy}
         >
           <Plus className="size-4" /> מודעה חדשה
         </Button>
@@ -399,10 +429,10 @@ export function AnnouncementsAdmin() {
                 {` · ${announcement.show_on_home ? "מופיעה גם בדף הבית" : "רק בטאב מודעות"}`}
               </p>
             </div>
-            <Button size="icon" variant="ghost" onClick={() => editAnnouncement(announcement)} aria-label="עריכה">
+            <Button size="icon" variant="ghost" disabled={draftBusy} onClick={() => editAnnouncement(announcement)} aria-label="עריכה">
               <Pencil className="size-4" />
             </Button>
-            <Button size="icon" variant="ghost" onClick={() => deleteAnnouncement(announcement)} aria-label="מחיקה">
+            <Button size="icon" variant="ghost" disabled={draftBusy} onClick={() => deleteAnnouncement(announcement)} aria-label="מחיקה">
               <Trash2 className="size-4 text-destructive" />
             </Button>
           </div>
@@ -414,9 +444,12 @@ export function AnnouncementsAdmin() {
           className="card-elev space-y-4 p-5"
           onSubmit={(e) => {
             e.preventDefault();
+            if (imageOperationRef.current || savingDraftRef.current) return;
+            savingDraftRef.current = true;
             save.mutate(
               { ...draft, expires_at: draft.expires_at || null },
               {
+                onSettled: () => { savingDraftRef.current = false; },
                 onSuccess: () => {
                   if (originalImagePath && originalImagePath !== draft.image_path) {
                     void supabase.storage.from("community-media").remove([originalImagePath]);
@@ -479,7 +512,7 @@ export function AnnouncementsAdmin() {
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/gif"
                   className="sr-only"
-                  disabled={uploadingImage}
+                  disabled={draftBusy}
                   data-testid="announcement-image-input"
                   onChange={(event) => {
                     const file = event.target.files?.[0];
@@ -498,6 +531,7 @@ export function AnnouncementsAdmin() {
                   variant="destructive"
                   className="absolute left-2 top-2"
                   aria-label="הסרת תמונת המודעה"
+                  disabled={draftBusy}
                   onClick={() => void removeDraftImage()}
                 >
                   <X className="size-4" />
@@ -566,7 +600,7 @@ export function AnnouncementsAdmin() {
               {save.isPending && <Loader2 className="size-4 animate-spin" />}
               {save.isPending ? "שומר…" : "שמירה"}
             </Button>
-            <Button type="button" variant="ghost" disabled={uploadingImage} onClick={() => void discardDraft()}>
+            <Button type="button" variant="ghost" disabled={draftBusy} onClick={() => void discardDraft()}>
               ביטול
             </Button>
           </div>

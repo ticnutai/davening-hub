@@ -12,6 +12,7 @@ test.beforeAll(async () => {
       import {MemoryRouter, useLocation} from 'react-router-dom';
       import {Tabs} from '@/components/ui/tabs';
       import {AdminNavigation} from '@/community/components/admin/AdminNavigation';
+      import {QrCodesAdmin} from '@/community/components/admin/QrCodesAdmin';
       import {QuickAddButton} from '@/community/components/QuickAddButton';
       import {EditorWorkspace} from '@/community/components/admin/tv/EditorWorkspace';
       function EditorDemo(){const [tab,setTab]=React.useState('design');const [draft,setDraft]=React.useState('');
@@ -25,12 +26,14 @@ test.beforeAll(async () => {
         <output data-testid="selected">{tab}</output><output data-testid="location">{location.pathname+location.search}</output>
         <QuickAddButton/></main>;
       }
-      createRoot(document.getElementById('root')).render(<MemoryRouter>{window.__editor ? <EditorDemo/> : <App/>}</MemoryRouter>);`,
+      createRoot(document.getElementById('root')).render(<MemoryRouter>{window.__qr ? <QrCodesAdmin/> : window.__editor ? <EditorDemo/> : <App/>}</MemoryRouter>);`,
       resolveDir: process.cwd(), loader: 'tsx',
     }, bundle: true, write: false, format: 'iife', jsx: 'automatic', loader: { '.css': 'empty' },
     alias: { '@': path.resolve('src'), '@community': path.resolve('src/community') },
     define: { 'process.env.NODE_ENV': '"production"' },
     plugins: [{ name: 'isolated-auth', setup(b) {
+      b.onResolve({filter: /lib\/community$/}, () => ({path:'test-community',namespace:'test-community'}));
+      b.onLoad({filter:/.*/,namespace:'test-community'},()=>({contents:'export function useCommunity(){return {id:"a",slug:"shul-a",name:"בית א"}}',loader:'js'}));
       b.onResolve({ filter: /lib\/use-auth$/ }, () => ({ path: 'test-auth', namespace: 'test-auth' }));
       b.onLoad({ filter: /.*/, namespace: 'test-auth' }, () => ({ contents: 'export function useAuth(){return {isAdmin:true,loading:false}}', loader: 'js' }));
     } }],
@@ -97,4 +100,22 @@ test('four primary editor steps retain draft when advanced tools open', async({p
   await expect(page.getByTestId('step')).toHaveText('tools');
   await page.getByRole('button',{name:'תוכן',exact:true}).click();
   await expect(page.getByLabel('טקסט בדיקה')).toHaveValue('טיוטה שלא נשמרה');
+});
+
+
+test('QR points at selected synagogue and downloads a real SVG', async ({page}) => {
+  const errors:string[]=[]; page.on('pageerror', e=>errors.push(e.message));
+  await page.route('**/*', route=>route.fulfill({contentType:'text/html',body:'<html dir="rtl"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div></html>'}));
+  await page.goto('https://qa.invalid/community/admin?shul=other');
+  await page.evaluate(()=>{(window as any).__qr=true});
+  await page.addStyleTag({content:css}); await page.addScriptTag({content:bundle});
+  await expect(page.getByRole('heading',{name:'אתר בית הכנסת — בית א'})).toBeVisible();
+  await expect(page.getByText('https://qa.invalid/community?shul=shul-a',{exact:true})).toBeVisible();
+  await expect(page.getByTestId('qr-website').locator('svg').filter({has:page.locator('path')})).not.toHaveCount(0);
+  const downloadPromise=page.waitForEvent('download');
+  await page.getByRole('button',{name:'הורדת QR'}).click();
+  const download=await downloadPromise; expect(download.suggestedFilename()).toBe('shul-hub-website-qr.svg');
+  expect(await download.failure()).toBeNull();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
 });

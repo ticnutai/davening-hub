@@ -25,7 +25,7 @@ import { supabase } from "@community/integrations/supabase/client";
 import { useAuth } from "@community/lib/use-auth";
 import { useAdminMessages } from "@community/lib/data";
 import { CommunitySwitcher, ShulNow } from "@/community/components/admin/CommunitySwitcher";
-import { listMyCommunities } from "@/community/lib/community";
+import { listMyCommunities, useCommunityId } from "@/community/lib/community";
 import { CommunitiesAdmin } from "@/community/components/admin/CommunitiesAdmin";
 import { SilentScreensAlert } from "@community/components/admin/tv/SilentScreensAlert";
 
@@ -38,6 +38,7 @@ export function AdminPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const qc = useQueryClient();
+  const selectedCommunityId = useCommunityId();
 
   // "הגדרות" is gone: the synagogue's details moved to its window under
   // "בתי כנסת", the site header and themes to "תצוגת דף הבית". An old link
@@ -132,6 +133,7 @@ export function AdminPage() {
           </div>
         ) : (
           <Tabs
+            key={selectedCommunityId}
             dir="rtl"
             value={activeTab}
             onValueChange={openTab}
