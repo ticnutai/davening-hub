@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { communityId } from "./community";
 import { supabase } from "@community/integrations/supabase/client";
 
 const roleSchema = z.enum(["admin", "user"]);
@@ -21,7 +22,7 @@ function readableError(message: string) {
 
 export async function listUsers() {
   const [{ data, error }, { data: sessionData }] = await Promise.all([
-    supabase.rpc("admin_list_users"),
+    supabase.rpc("community_admin_list_users", { p_community_id: communityId() }),
     supabase.auth.getSession(),
   ]);
   if (error) throw new Error(readableError(error.message));
@@ -35,7 +36,8 @@ export async function listUsers() {
 
 export async function createUser({ data }: { data: z.input<typeof createUserSchema> }) {
   const input = createUserSchema.parse(data);
-  const { data: userId, error } = await supabase.rpc("admin_create_user", {
+  const { data: userId, error } = await supabase.rpc("community_admin_create_user", {
+    p_community_id: communityId(),
     p_email: input.email,
     p_name: input.name,
     p_password: input.password,
@@ -47,7 +49,8 @@ export async function createUser({ data }: { data: z.input<typeof createUserSche
 
 export async function updateUserRole({ data }: { data: z.input<typeof updateRoleSchema> }) {
   const input = updateRoleSchema.parse(data);
-  const { error } = await supabase.rpc("admin_update_user_role", {
+  const { error } = await supabase.rpc("community_admin_update_user_role", {
+    p_community_id: communityId(),
     p_user_id: input.userId,
     p_role: input.role,
   });

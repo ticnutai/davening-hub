@@ -1,3 +1,4 @@
+import { communityId } from "@community/lib/community";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldCheck, UserPlus, Users } from "lucide-react";
@@ -22,7 +23,7 @@ export function UsersAdmin() {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("user");
-  const usersQuery = useQuery({ queryKey: ["admin-users"], queryFn: () => listUsers() });
+  const usersQuery = useQuery({ queryKey: ["admin-users", communityId()], queryFn: () => listUsers() });
 
   const addUser = useMutation({
     mutationFn: () => createUser({ data: { email, name, password, role } }),
@@ -48,7 +49,7 @@ export function UsersAdmin() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6"><p className="rounded-lg border p-3 text-sm">השינויים כאן חלים רק על בית הכנסת הנבחר. מנהל ראשי יכול לבחור בית כנסת אחר ולנהל גם אותו; הרשאת גבאי אינה הרשאת מנהל ראשי.</p>
       <section className="card-elev p-4 sm:p-6" aria-labelledby="add-user-title">
         <div className="flex items-center gap-3">
           <span className="rounded-xl bg-secondary p-2 text-primary">
@@ -126,7 +127,7 @@ export function UsersAdmin() {
         <div className="flex items-center gap-3 border-b border-border p-4 sm:p-6">
           <Users className="size-5 text-primary" />
           <h2 id="users-title" className="text-lg font-bold">
-            משתמשים קיימים
+            משתמשי בית הכנסת הנבחר
           </h2>
         </div>
         {usersQuery.isLoading && (

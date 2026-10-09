@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useUserRoles, type AppRole } from "@/hooks/useUserRoles";
+import { type AppRole } from "@/hooks/useUserRoles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +38,11 @@ const roleColors: Record<AppRole, string> = {
 const AdminPermissions = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { isAdmin, loading: rolesLoading } = useUserRoles();
+  const { data: isAdmin = false, isLoading: rolesLoading } = useQuery({
+    queryKey: ["is-platform-admin"],
+    enabled: !!user,
+    queryFn: async () => { const { data, error } = await supabase.rpc("is_platform_admin"); if (error) throw error; return Boolean(data); },
+  });
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -50,7 +55,7 @@ const AdminPermissions = () => {
       return;
     }
     if (!isAdmin) {
-      toast.error("אין לך הרשאת אדמין");
+      toast.error("מסך זה מיועד למנהל הראשי. משתמשי בית הכנסת מנוהלים במסך הגבאי.");
       navigate("/community");
     }
   }, [user, isAdmin, authLoading, rolesLoading, navigate]);

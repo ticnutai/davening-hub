@@ -1733,6 +1733,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      community_admin_create_user: {
+        Args: { p_community_id: string; p_email: string; p_password: string; p_name?: string; p_role?: Database["public"]["Enums"]["app_role"] }
+        Returns: string
+      }
+      community_admin_list_users: {
+        Args: { p_community_id: string }
+        Returns: { id: string; email: string; name: string; created_at: string; last_sign_in_at: string; role: string }[]
+      }
+      community_admin_update_user_role: {
+        Args: { p_community_id: string; p_user_id: string; p_role: Database["public"]["Enums"]["app_role"] }
+        Returns: boolean
+      }
+
       admin_create_user: {
         Args: {
           p_email: string
