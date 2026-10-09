@@ -549,7 +549,7 @@ function TvDesignPanelContent({ studio = false }: { studio?: boolean } = {}) {
    */
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() => {
     const stored = readStored("new-shul-editor-workspace-v1");
-    return isWorkspaceMode(stored) ? stored : "classic";
+    return isWorkspaceMode(stored) ? stored : "side";
   });
   const chooseWorkspace = (mode: WorkspaceMode) => {
     setWorkspaceMode(mode);
@@ -1231,11 +1231,11 @@ function TvDesignPanelContent({ studio = false }: { studio?: boolean } = {}) {
   // "ביטול שינויים" asks first, inline (see below).
   const controls = (
     <>
-      {!studio && <label className="flex items-center gap-2 rounded-lg border p-2 text-sm">סביבת העריכה
+      {!studio && <details className="rounded-lg border p-2 text-sm"><summary className="cursor-pointer">העדפות סביבת העריכה</summary><label className="mt-2 flex items-center gap-2">סביבת העריכה
         <select aria-label="סביבת העריכה" value={workspaceMode} onChange={e=>chooseWorkspace(e.target.value as WorkspaceMode)} className="min-w-0 rounded border p-2 bg-background">
           {WORKSPACES.map(([id,label])=><option key={id} value={id}>{label}</option>)}
         </select>
-      </label>}
+      </label></details>}
       <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-2 rounded-xl border bg-background/95 p-2 shadow-sm backdrop-blur">
         <Button type="button" variant="outline" size="sm" onClick={() => {
           setTab('tools');
@@ -1931,6 +1931,16 @@ function TvDesignPanelContent({ studio = false }: { studio?: boolean } = {}) {
               />
             </div></>}
           </Section>
+        </TabsContent>
+        <TabsContent value="review" className="mt-3 space-y-3 rounded-xl border p-4">
+          <h2 className="font-semibold">בדיקה לפני שידור</h2>
+          <p>התצוגה המקדימה מציגה את הטיוטה. בדקו את שם בית הכנסת, התוכן, הזמנים והמסגרות לפני השמירה.</p>
+          <ol className="list-decimal space-y-2 ps-5 text-sm">
+            <li>ודאו שבחרתם את הלוח והמסכים הנכונים בבורר ההיקף.</li>
+            <li>בדקו שהטקסט קריא וששום תיבה אינה מסתירה תיבה אחרת.</li>
+            <li>לפרסום השתמשו בכפתור השמירה שבסרגל. צעד אחורה וביטול שינויים זמינים באותו סרגל.</li>
+          </ol>
+          <p className="text-sm text-muted-foreground">שמירת עיצוב הלוח אינה שמירת מניינים או מודעות. את רשומות התוכן עורכים במדורי התוכן של הגבאי.</p>
         </TabsContent>
         <TabsContent
           value="tools"

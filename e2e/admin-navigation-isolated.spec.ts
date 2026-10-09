@@ -13,15 +13,21 @@ test.beforeAll(async () => {
       import {Tabs} from '@/components/ui/tabs';
       import {AdminNavigation} from '@/community/components/admin/AdminNavigation';
       import {QuickAddButton} from '@/community/components/QuickAddButton';
+      import {EditorWorkspace} from '@/community/components/admin/tv/EditorWorkspace';
+      function EditorDemo(){const [tab,setTab]=React.useState('design');const [draft,setDraft]=React.useState('');
+        return <EditorWorkspace mode="side" tab={tab} onTab={setTab} layers={[]} selected={null} onSelect={()=>{}} inspector={null}
+          preview={<div data-testid="preview">{draft}</div>}
+          controls={<><label>טקסט בדיקה<input aria-label="טקסט בדיקה" value={draft} onChange={e=>setDraft(e.target.value)}/></label><output data-testid="step">{tab}</output></>}/>;
+      }
       function App(){ const [tab,setTab]=React.useState('minyanim'); const location=useLocation();
         return <main dir="rtl" style={{padding:12}}><h1>בדיקת ניווט מבודדת</h1>
         <Tabs value={tab} onValueChange={setTab}><AdminNavigation storeApp={false} unread={3}/></Tabs>
         <output data-testid="selected">{tab}</output><output data-testid="location">{location.pathname+location.search}</output>
         <QuickAddButton/></main>;
       }
-      createRoot(document.getElementById('root')).render(<MemoryRouter><App/></MemoryRouter>);`,
+      createRoot(document.getElementById('root')).render(<MemoryRouter>{window.__editor ? <EditorDemo/> : <App/>}</MemoryRouter>);`,
       resolveDir: process.cwd(), loader: 'tsx',
-    }, bundle: true, write: false, format: 'iife', jsx: 'automatic',
+    }, bundle: true, write: false, format: 'iife', jsx: 'automatic', loader: { '.css': 'empty' },
     alias: { '@': path.resolve('src'), '@community': path.resolve('src/community') },
     define: { 'process.env.NODE_ENV': '"production"' },
     plugins: [{ name: 'isolated-auth', setup(b) {
@@ -70,4 +76,25 @@ test('workspace hides only its replacement navigation, not nested tools', async 
   await page.addStyleTag({ content: readFileSync('src/community/components/admin/tv/editorWorkspace.css', 'utf8') });
   await expect(page.locator('[data-editor-main-tabs]')).toBeHidden();
   await expect(page.getByRole('tab', { name: 'אפשרות פנימית' })).toBeVisible();
+});
+
+
+test('four primary editor steps retain draft when advanced tools open', async({page})=>{
+  await page.setContent('<html lang="he" dir="rtl"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div></html>');
+  await page.evaluate(()=>{(window as any).__editor=true});
+  await page.addStyleTag({content:css+'\n'+readFileSync('src/community/components/admin/tv/editorWorkspace.css','utf8')});
+  await page.addScriptTag({content:bundle});
+  await page.getByLabel('טקסט בדיקה').fill('טיוטה שלא נשמרה');
+  for(const [name,id] of [['ערכה','design'],['חלקים ומיקום','layout'],['תוכן','content'],['בדיקה ושידור','review']]){
+    await page.getByRole('button',{name,exact:true}).click();
+    await expect(page.getByTestId('step')).toHaveText(id);
+    await expect(page.getByTestId('preview')).toHaveText('טיוטה שלא נשמרה');
+    await expect(page.getByTestId('preview')).toHaveCount(1);
+  }
+  await expect(page.getByRole('button',{name:'ייבוא וגרסאות',exact:true})).toBeHidden();
+  await page.getByText('כלים נוספים',{exact:true}).click();
+  await page.getByRole('button',{name:'ייבוא וגרסאות',exact:true}).click();
+  await expect(page.getByTestId('step')).toHaveText('tools');
+  await page.getByRole('button',{name:'תוכן',exact:true}).click();
+  await expect(page.getByLabel('טקסט בדיקה')).toHaveValue('טיוטה שלא נשמרה');
 });

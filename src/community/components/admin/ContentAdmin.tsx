@@ -851,8 +851,8 @@ export function ShiurimAdmin() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button type="submit">שמירה</Button>
-            <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
+            <Button type="submit" disabled={save.isPending}>{save.isPending ? "שומר…" : "שמירה"}</Button>
+            <Button type="button" variant="ghost" disabled={save.isPending} onClick={() => setDraft(null)}>
               ביטול
             </Button>
           </div>
@@ -972,8 +972,8 @@ export function ChavrutotAdmin() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button type="submit">שמירה</Button>
-            <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
+            <Button type="submit" disabled={save.isPending}>{save.isPending ? "שומר…" : "שמירה"}</Button>
+            <Button type="button" variant="ghost" disabled={save.isPending} onClick={() => setDraft(null)}>
               ביטול
             </Button>
           </div>

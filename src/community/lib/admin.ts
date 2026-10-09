@@ -19,12 +19,13 @@ export function useSaveRow(table: TableName, queryKey: string) {
       const { error } = row["id"]
         ? await supabase
             .from(table)
-            .update(row as never)
+            .update({ ...row, community_id: communityId() } as never)
             .eq("id", row["id"] as string)
+            .eq("community_id", communityId())
         : // A new row belongs to the synagogue being edited. Without this
           // the column's default (the only active synagogue) put rows made in
           // another synagogue's admin into the main one.
-          await supabase.from(table).insert({ community_id: communityId(), ...row } as never);
+          await supabase.from(table).insert({ ...row, community_id: communityId() } as never);
       if (error) throw error;
     },
     onSuccess: async () => {
@@ -39,7 +40,7 @@ export function useDeleteRow(table: TableName, queryKey: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from(table).delete().eq("id", id);
+      const { error } = await supabase.from(table).delete().eq("id", id).eq("community_id", communityId());
       if (error) throw error;
     },
     onSuccess: async () => {
