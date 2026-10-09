@@ -1,3 +1,4 @@
+import { EditorWorkspace, WORKSPACES, isWorkspaceMode, type WorkspaceMode } from "./EditorWorkspace";
 import { ElementEditingProvider } from "./ElementEditingProvider";
 import { useLocation } from 'react-router-dom';
 import { useElementEditing } from "@/tv/elementEditing";
@@ -546,6 +547,15 @@ function TvDesignPanelContent({ studio = false }: { studio?: boolean } = {}) {
    * "I am fixing the phone now". Every control below then means what it
    * says, and the preview shows that screen.
    */
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() => {
+    const stored = readStored("new-shul-editor-workspace-v1");
+    return isWorkspaceMode(stored) ? stored : "classic";
+  });
+  const chooseWorkspace = (mode: WorkspaceMode) => {
+    setWorkspaceMode(mode);
+    try { localStorage.setItem("new-shul-editor-workspace-v1", mode); } catch { /* optional UI preference */ }
+    if (mode !== "classic") setEditing(true);
+  };
   const [scope, setScope] = useState<DeviceScope>("all");
   const scopeDevice = scope === "all" ? null : scope;
   /**
@@ -680,7 +690,7 @@ function TvDesignPanelContent({ studio = false }: { studio?: boolean } = {}) {
   const [autoplay, setAutoplay] = useState(false);
   // Click-to-edit on the board itself (see boardEdit.ts / TvEditInspector).
   // The live window opens ready to click on the board.
-  const [editing, setEditing] = useState(studio);
+  const [editing, setEditing] = useState(studio || workspaceMode !== "classic");
   const [selected, setSelected] = useState<string | null>(null);
   /**
    * A double click on the board: editing opens, and the part under the
@@ -1221,6 +1231,11 @@ function TvDesignPanelContent({ studio = false }: { studio?: boolean } = {}) {
   // "ביטול שינויים" asks first, inline (see below).
   const controls = (
     <>
+      {!studio && <label className="flex items-center gap-2 rounded-lg border p-2 text-sm">סביבת העריכה
+        <select aria-label="סביבת העריכה" value={workspaceMode} onChange={e=>chooseWorkspace(e.target.value as WorkspaceMode)} className="min-w-0 rounded border p-2 bg-background">
+          {WORKSPACES.map(([id,label])=><option key={id} value={id}>{label}</option>)}
+        </select>
+      </label>}
       <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-2 rounded-xl border bg-background/95 p-2 shadow-sm backdrop-blur">
         <Button type="button" variant="outline" size="sm" onClick={() => {
           setTab('tools');
@@ -2166,7 +2181,7 @@ function TvDesignPanelContent({ studio = false }: { studio?: boolean } = {}) {
         onEdit={edit}
         large={top || fullscreen}
         fitHeight={top ? topHeight : side && isLarge ? sideHeight : undefined}
-        toolbarExtra={layoutButtons}
+        toolbarExtra={workspaceMode === "classic" ? layoutButtons : undefined}
         bare={bare}
         onRequestEdit={editOnBoardAt}
         onResize={fullscreen ? undefined : resizeBoard}
@@ -2254,6 +2269,18 @@ function TvDesignPanelContent({ studio = false }: { studio?: boolean } = {}) {
       )}
     </>
   );
+
+  if (workspaceMode !== "classic" && !fullscreen) {
+    const elementLayers = (view.elements ?? []).length
+      ? (view.elements ?? []).map(e=>({id:e.id,name:e.name || e.id}))
+      : [{id:"standard:board.background",name:"רקע ומסגרת הלוח"},{id:"standard:header.title",name:"שם בית הכנסת"},{id:"standard:dash.prayers",name:"כותרת זמני התפילות"},{id:"standard:dash.zmanim",name:"כותרת זמני היום"}];
+    return <EditorWorkspace mode={workspaceMode} tab={tab} onTab={setTab}
+      layers={elementLayers} selected={elementEditing.selected[0] ?? (selected ? `standard:${selected}` : null)}
+      onSelect={id=>{setEditing(true);if(id.startsWith("standard:")){setSelected(id.slice(9));}else{selectElements([id]);setTab("layout");}}}
+      preview={<>{studioView}<div className="mt-3 flex flex-wrap gap-2">{previewActions}</div></>}
+      inspector={editing && selected ? <TvEditInspector selected={selected} config={view} data={board.data} onEdit={edit} onSelect={setSelected}/> : null}
+      controls={controls} />;
+  }
 
   if (top)
     return (
