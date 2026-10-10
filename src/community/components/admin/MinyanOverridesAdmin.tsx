@@ -82,7 +82,7 @@ export function MinyanOverridesAdmin() {
       return !was;
     });
 
-  const { data: overrides = [], isLoading } = useQuery({
+  const { data: overrides = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["minyan-overrides-admin", community],
     enabled: Boolean(community),
     queryFn: async (): Promise<MinyanOverrideRow[]> => {
@@ -97,6 +97,13 @@ export function MinyanOverridesAdmin() {
     },
   });
 
+  function selectOverride(nextMinyan: string, nextDate: string) {
+    const existing = overrides.find(o => o.minyan_id === nextMinyan && o.on_date === nextDate);
+    setMinyanId(nextMinyan); setDate(nextDate);
+    setTime(existing?.at_time?.slice(0, 5) ?? "");
+    setCancelled(existing?.cancelled ?? false); setNote(existing?.note ?? "");
+  }
+  const existingOverride = overrides.find(o => o.minyan_id === minyanId && o.on_date === date);
   const byId = useMemo(() => new Map(minyanim.map((m) => [m.id, m])), [minyanim]);
 
   const refresh = () => {
@@ -127,6 +134,7 @@ export function MinyanOverridesAdmin() {
     },
     onSuccess: () => {
       toast.success("השינוי נשמר ליום הזה בלבד");
+      setMinyanId("");
       setTime("");
       setCancelled(false);
       setNote("");
@@ -137,7 +145,7 @@ export function MinyanOverridesAdmin() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("minyan_overrides").delete().eq("id", id);
+      const { error } = await supabase.from("minyan_overrides").delete().eq("id", id).eq("community_id", community);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -150,7 +158,7 @@ export function MinyanOverridesAdmin() {
   // A row that changes nothing is a row somebody will later read as meaning
   // something; the database refuses it too.
   const saysSomething = cancelled || Boolean(time) || note.trim().length > 0;
-  const canSave = Boolean(minyanId) && Boolean(date) && saysSomething && !save.isPending;
+  const canSave = Boolean(minyanId) && Boolean(date) && saysSomething && !save.isPending && !remove.isPending && !isLoading && !isError;
 
   return (
     <section className="card-elev space-y-4 p-4 sm:p-5" data-testid="minyan-overrides">
@@ -185,7 +193,7 @@ export function MinyanOverridesAdmin() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="lg:col-span-2">
               <Label className="text-sm">המניין</Label>
-              <Select value={minyanId} onValueChange={setMinyanId}>
+              <Select value={minyanId} disabled={isLoading || isError || save.isPending || remove.isPending} onValueChange={value => selectOverride(value, date)}>
                 <SelectTrigger className="mt-1" aria-label="בחירת מניין">
                   <SelectValue placeholder="בחירת מניין" />
                 </SelectTrigger>
@@ -217,7 +225,8 @@ export function MinyanOverridesAdmin() {
                 value={date}
                 min={today}
                 max={addDays(today, HORIZON_DAYS * 6)}
-                onChange={(e) => setDate(e.target.value)}
+                disabled={isLoading || isError || save.isPending || remove.isPending}
+                onChange={(e) => selectOverride(minyanId, e.target.value)}
               />
             </div>
 
@@ -264,8 +273,10 @@ export function MinyanOverridesAdmin() {
               ) : (
                 <Plus className="size-4" />
               )}
-              שמירת השינוי
+              {existingOverride ? "עדכון השינוי הקיים" : "שמירת השינוי"}
             </Button>
+            <Button variant="outline" disabled={save.isPending || remove.isPending} onClick={() => selectOverride("", today)}>ניקוי הטופס</Button>
+            {existingOverride && <p className="text-sm text-muted-foreground">עריכת שינוי קיים — השעה, הביטול וההערה נטענו מהרשומה השמורה.</p>}
             {minyanId && !saysSomething && (
               <p className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
                 <TriangleAlert className="size-3.5" />
@@ -276,7 +287,7 @@ export function MinyanOverridesAdmin() {
 
           <div className="border-t pt-3">
             <h4 className="text-sm font-medium">שינויים קרובים</h4>
-            {isLoading ? (
+            {isError ? <div role="alert">טעינת השינויים נכשלה. <Button variant="outline" onClick={() => void refetch()}>ניסיון חוזר</Button></div> : isLoading ? (
               <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> טוען…
               </p>
@@ -303,7 +314,9 @@ export function MinyanOverridesAdmin() {
                         <span className="font-semibold">{o.at_time.slice(0, 5)}</span>
                       ) : null}
                       {o.note && <span className="text-muted-foreground">״{o.note}״</span>}
+                      <Button variant="outline" size="sm" disabled={save.isPending || remove.isPending} onClick={() => selectOverride(o.minyan_id, o.on_date)}>עריכת השינוי</Button>
                       <Button
+                        disabled={save.isPending || remove.isPending}
                         size="sm"
                         variant="ghost"
                         className="ms-auto"
