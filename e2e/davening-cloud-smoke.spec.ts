@@ -43,3 +43,19 @@ test('public community pages keep distinct readable entry points', async ({ page
   await expect(page.getByRole('button', { name: 'שליחת הודעה', exact: true })).toHaveCount(1);
   expect(errors).toEqual([]);
 });
+
+test('published catalogue includes lunar and hall themes with reachable assets', async ({page})=>{
+ test.skip(!process.env.E2E_BASE_URL?.includes('davening-hub.lovable.app'),'Explicit new deployment only');
+ test.setTimeout(90000);
+ await page.goto('/community');
+ const catalogue=await page.evaluate(async()=>{const r=await fetch('/new-shul-catalog.json?release=333a502',{cache:'no-store'});if(!r.ok)throw new Error('catalog HTTP '+r.status);return r.json();});
+ expect(catalogue.designs).toHaveLength(77);
+ expect(catalogue.parts).toHaveLength(849);
+ const added=catalogue.designs.filter((d:any)=>d.id.startsWith('d_rc_')||d.id.startsWith('d_hall_'));
+ expect(added).toHaveLength(10);
+ for(const d of added)expect(catalogue.parts.filter((p:any)=>p.designId===d.id)).toHaveLength(d.values.elements.length);
+ const assets=[...new Set<string>(added.flatMap((d:any)=>d.values.elements.map((e:any)=>e.image).filter(Boolean)))];
+ const decoded=await page.evaluate(async(urls)=>Promise.all(urls.map(async src=>{const img=new Image();img.src=src;await img.decode();return {src,width:img.naturalWidth,height:img.naturalHeight};})),assets);
+ expect(decoded.every(i=>i.width>0&&i.height>0)).toBe(true);
+ console.log(JSON.stringify({themes:catalogue.designs.length,parts:catalogue.parts.length,newThemes:added.length,decodedAssets:decoded.length}));
+});
