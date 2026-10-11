@@ -3,8 +3,8 @@ import {readFileSync,existsSync} from 'node:fs';
 import {ROSH_CHODESH_DESIGNS} from './roshChodeshDesigns';
 import {normalizeElements,exportElementSet,importElementSet,moveElements} from './elements';
 import {parseSharedCatalog} from './sharedCatalog';
-it('ships four complete designs with independently editable layers, all within the canvas',()=>{
- expect(ROSH_CHODESH_DESIGNS).toHaveLength(4);
+it('ships six complete designs with independently editable layers, all within the canvas',()=>{
+ expect(ROSH_CHODESH_DESIGNS).toHaveLength(6);
  for(const d of ROSH_CHODESH_DESIGNS){
   const elements=d.values.elements!;
   expect(normalizeElements(elements)).toEqual(elements);

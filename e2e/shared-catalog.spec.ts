@@ -12,7 +12,7 @@ test('global catalogue supplies all screenshot themes and parts to existing and 
    const page=await context.newPage();const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
    await page.goto(`/e2e/fixtures/shared-catalog.html?board=${board}`);
    const themes=page.getByTestId('shared-catalog-designs'),parts=page.getByTestId('shared-catalog-parts');
-   await expect(themes.getByTestId('shared-count')).toHaveText('71 ערכות זמינים');
+   await expect(themes.getByTestId('shared-count')).toHaveText('73 ערכות זמינים');
    expect(JSON.parse(await page.getByTestId('state').innerText()).elements).toBe(0);
    for(const name of ['עץ היכל','אבן ירושלים','ארמון אמרלד','אודם ונחושת','פנינה וכסף','אוניקס וזהב','פסיפס זית','ארז ונחושת','תכלת ופורצלן','אחלמה מלכותית','אלבסטר ורוד']){
     await themes.getByLabel('חיפוש בקטלוג המשותף').fill(name);

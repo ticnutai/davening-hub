@@ -8,6 +8,8 @@ const palettes = [
   {id:'pearl',name:'אור פנינה',bg:'#f3f0e9',panel:'#fffdf7',ink:'#15263f',gold:'#ad8751',photoX:4},
   {id:'jerusalem',name:'ירושלים בלילה',bg:'#082d35',panel:'#0e3a43',ink:'#fff1d3',gold:'#d5b46d',photoX:68},
   {id:'dawn',name:'שחר של חודש',bg:'#eae0ce',panel:'#fff8e9',ink:'#513d27',gold:'#9c753d',photoX:37},
+  {id:'amethyst',name:'היכל הלבנה',bg:'#201329',panel:'#321e3f',ink:'#fff2df',gold:'#d4b378',photoX:37},
+  {id:'silver',name:'כסף השמים',bg:'#dce8f1',panel:'#f8fcff',ink:'#243c52',gold:'#708da5',photoX:68},
 ] as const;
 
 /** Real editor objects, not text or frames flattened into a background. */
@@ -26,6 +28,10 @@ export const ROSH_CHODESH_DESIGNS:SavedDesign[] = palettes.map(p=>{
   add('photo','image','תמונת סהר וירושלים — צילום משולב',p.photoX,25,22,61,{
     image:'/new-shul-assets/rosh-chodesh-moon.png'});
   add('photo_frame','frame','מסגרת תמונת הסהר',p.photoX-0.5,24.2,23,62.6);
+  if(p.id==='amethyst'||p.id==='silver'){
+    add('ornament_left','ornament','עיטור ראש חודש שמאל',5,15,22,6);
+    add('ornament_right','ornament','עיטור ראש חודש ימין',73,15,22,6);
+  }
   const available=[4,37,68].filter(x=>x!==p.photoX);
   const panel=(id:string,label:string,x:number,y:number,h:number,binding:BoardElement['binding'])=>{
     add(id+'_fill','box','מילוי '+label,x,y,28,h,{fill:p.panel,color:'transparent'});
@@ -39,7 +45,7 @@ export const ROSH_CHODESH_DESIGNS:SavedDesign[] = palettes.map(p=>{
   panel('prayers','זמני תפילות',available[1],24,30,'prayers');
   panel('notices','הודעות הקהילה',available[1],57,30,'announcements');
   add('parasha','text','פרשת השבוע',30,89,40,4,{binding:'parasha',color:p.ink,fontSize:2});
-  add('footer','text','שיעורי תורה',8,94,84,3,{binding:'lessons',color:p.ink,fontSize:1.5});
+  add('footer','text','שיעורי תורה',8,94,84,3,{binding:'lessons',color:p.ink,fontSize:1.5,rowsPerPage:1});
   return {id:'d_rc_'+p.id,name:'ראש חודש · '+p.name,theme:p.id==='royal'||p.id==='jerusalem'?'navy':'stone',
     parts:['background','frames','text','layout'],colours:{'--tv-text':p.ink,'--tv-accent':p.gold},
     values:{...structuredClone(EMERALD_COMPOSITION.values),elements,backgroundGradient:null,backgroundImage:null}};
