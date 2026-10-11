@@ -2,6 +2,7 @@ import type {SavedDesign} from './designs';
 import {newElement, type BoardElement} from './elements';
 import {EMERALD_COMPOSITION} from './emeraldComposition';
 import {ZMAN_DISPLAY_KEYS} from '@/community/lib/zmanim';
+import {COLLECTION_DESIGNS} from './collectionDesigns';
 
 const palettes = [
   {id:'royal',name:'לבנה מלכותית',bg:'#08152b',panel:'#10233f',ink:'#fff3d8',gold:'#d8b875',photoX:37},
@@ -50,3 +51,36 @@ export const ROSH_CHODESH_DESIGNS:SavedDesign[] = palettes.map(p=>{
     parts:['background','frames','text','layout'],colours:{'--tv-text':p.ink,'--tv-accent':p.gold},
     values:{...structuredClone(EMERALD_COMPOSITION.values),elements,backgroundGradient:null,backgroundImage:null}};
 });
+
+// Astronomical decoration, not a crescent-and-star emblem. Every light is removable.
+const antique=structuredClone(COLLECTION_DESIGNS.find(d=>d.id==='d_bronzegates')!);
+antique.id='d_rc_antique';
+antique.name='ראש חודש · שערי הלבנה';
+antique.values.elements=antique.values.elements!
+  .filter(e=>!e.id.endsWith('_symbol')&&!e.id.endsWith('_divider'))
+  .map(e=>({...e,id:e.id.replace('bronzegates','rc_antique')}));
+antique.values.elements.unshift({...newElement('box'),id:'rc_antique_background',name:'רקע קלף עתיק',x:0,y:0,width:100,height:100,fill:'#f1e7d2',color:'transparent'});
+antique.values.backgroundGradient=null;
+antique.values.elements.push(
+  {...newElement('image'),id:'rc_antique_moon',name:'ירח טבעי — קישוט בלבד, לא מופע הירח הנוכחי',image:'/new-shul-assets/antique-natural-moon.svg',x:45,y:2,width:10,height:17},
+  {...newElement('text'),id:'rc_antique_greeting',name:'ברכת ראש חודש',text:'ראש חודש מבורך',x:33,y:22,width:34,height:5,fontSize:2.7,color:'#8c5729'},
+);
+for(const [i,x,y,size] of [[1,34,5,.6],[2,39,13,.4],[3,62,23,.45],[4,30,23,.35]]){
+  antique.values.elements.push({...newElement('image'),id:'rc_antique_star_'+i,name:'נקודת אור בשמים '+i,image:'/new-shul-assets/antique-starlight.svg',x,y,width:1,height:1.78,opacity:size});
+}
+// Luxury edition: photographic walnut/gold frames with separate illuminated fills.
+antique.values.elements=antique.values.elements.filter(e=>!['rc_antique_lessons_fill','rc_antique_lessons_frame'].includes(e.id));
+const ae=antique.values.elements;
+Object.assign(ae.find(e=>e.id==='rc_antique_background')!,{kind:'image',name:'רקע ספריית אגוז מפוארת',image:'/new-shul-assets/salonwalnut-background.png',crop:{x:0,y:0,width:100,height:100}});
+for(const [panel,x] of [['zmanim',1.5],['notices',34],['prayers',66.5]] as const){
+  for(const layer of ['fill','frame'])Object.assign(ae.find(e=>e.id===`rc_antique_${panel}_${layer}`)!,{
+    x,y:23,width:32,height:73,image:`/new-shul-assets/antique-palace-${layer}.${layer==='fill'?'svg':'png'}`});
+  Object.assign(ae.find(e=>e.id===`rc_antique_${panel}_heading`)!,{x:x+8,y:47,width:16,height:4,fontSize:2.1});
+  Object.assign(ae.find(e=>e.id===`rc_antique_${panel}_content`)!,{x:x+8,y:53,width:16,height:panel==='notices'?11:29,fontSize:panel==='zmanim'?1.3:panel==='prayers'?2.5:1.65});
+}
+Object.assign(ae.find(e=>e.id==='rc_antique_lessons_heading')!,{x:42,y:69,width:16,height:4,fontSize:2.1});
+Object.assign(ae.find(e=>e.id==='rc_antique_lessons_content')!,{x:42,y:75,width:16,height:8,fontSize:1.65});
+Object.assign(ae.find(e=>e.id==='rc_antique_moon')!,{x:47,y:5,width:6,height:10.6,opacity:.85});
+Object.assign(ae.find(e=>e.id==='rc_antique_greeting')!,{y:18,color:'#f5d48f'});
+for(const e of ae)if(['title','clock','date','parasha','footer'].includes(e.binding??''))e.color='#fff0c8';
+ROSH_CHODESH_DESIGNS.push(antique);

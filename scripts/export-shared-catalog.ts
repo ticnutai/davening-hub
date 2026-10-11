@@ -8,8 +8,8 @@ const clone=<T,>(v:T):T=>JSON.parse(JSON.stringify(v,(_,x)=>typeof x==='string'&
 const parts=READY_ELEMENTS.map(p=>({id:p.id,name:p.name,designId:'standalone',elements:p.elements,note:'פריט עצמאי מהספרייה'}));
 for(const d of BUILTIN_DESIGNS){
  for(const e of d.values.elements??[]){
-  if(e.hidden || (!d.id.startsWith('d_rc_') && (e.kind!=='image'||!e.image)))continue;
-  parts.push({id:`catalog_${d.id}_${e.id}`,name:e.name,designId:d.id,elements:[e],note:d.id.startsWith('d_rc_')?(e.kind==='image'?'תמונה משולבת; ניתנת להזזה, החלפה ומחיקה':'רכיב עצמאי לעריכה, שינוי צבע ומחיקה'):d.id.startsWith('d_premium_')?'אזור מהציור המקורי; הרקע שבתוך החיתוך נשאר מחובר':e.sourceMask?'פרט מהמקור במסכה':'שכבת תמונה עצמאית'});
+  if(e.hidden || (!d.id.startsWith('d_rc_') && !d.id.startsWith('d_hall_') && (e.kind!=='image'||!e.image)))continue;
+  parts.push({id:`catalog_${d.id}_${e.id}`,name:e.name,designId:d.id,elements:[e],note:d.id.startsWith('d_rc_')?(e.kind==='image'?(d.id==='d_rc_antique'?'שכבה עצמאית להזזה, החלפה ומחיקה':'תמונה משולבת; ניתנת להזזה, החלפה ומחיקה'):'רכיב עצמאי לעריכה, שינוי צבע ומחיקה'):d.id.startsWith('d_premium_')?'אזור מהציור המקורי; הרקע שבתוך החיתוך נשאר מחובר':e.sourceMask?'פרט מהמקור במסכה':'שכבת תמונה עצמאית'});
  }
 }
 const catalog=clone({format:'new-shul-shared-catalog',version:1,designs:BUILTIN_DESIGNS,parts});

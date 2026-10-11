@@ -1,3 +1,4 @@
+import { HALL_DESIGNS } from './hallDesigns';
 import { ROSH_CHODESH_DESIGNS } from './roshChodeshDesigns';
 import { SIGNATURE_DESIGNS } from './signatureDesigns';
 import { newElement } from "./elements";
@@ -282,6 +283,7 @@ const frames = (patch: Partial<TvConfig["frameStyle"]>) => ({
 });
 
 export const BUILTIN_DESIGNS: SavedDesign[] = [
+  ...HALL_DESIGNS,
   ...ROSH_CHODESH_DESIGNS,
   ...COLLECTION_DESIGNS,
   ...REALISTIC_DESIGNS,
